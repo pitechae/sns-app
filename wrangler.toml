@@ -1,0 +1,38 @@
+name = "sns-app"
+main = "./.cloudflare/worker.js"
+compatibility_date = "2025-05-20"
+compatibility_flags = ["nodejs_compat", "nodejs_compat_v2"]
+
+# Environment configuration
+[env.production]
+# Production-specific configuration
+
+# Production D1 Database binding
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "sns-app"
+database_id = "2a234edb-20f3-4637-b06e-db48295c8e9e"
+
+[env.staging]
+# Staging-specific configuration
+
+# Staging D1 Database binding - using production database for now
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "sns-app"
+database_id = "2a234edb-20f3-4637-b06e-db48295c8e9e"
+
+[env.development]
+# Development-specific configuration
+
+# Development D1 Database binding
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "sns-app-dev"
+database_id = "4b5ee013-bcb9-4b73-bfe1-d55e04b160a3"
+
+# Default D1 Database binding (used for local development)
+[[d1_databases]]
+binding = "DB"
+database_name = "sns-app-dev"
+database_id = "4b5ee013-bcb9-4b73-bfe1-d55e04b160a3"
