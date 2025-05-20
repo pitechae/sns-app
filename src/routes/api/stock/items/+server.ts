@@ -34,7 +34,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 export const GET: RequestHandler = async ({ platform, url }) => {
   try {
     const page = parseInt(url.searchParams.get('page') || '1');
-    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const limit = parseInt(url.searchParams.get('limit') || '10'); // Changed default to 10 to match pagination
     const search = url.searchParams.get('search') || '';
     
     if (!platform?.env?.DB) {
@@ -45,8 +45,11 @@ export const GET: RequestHandler = async ({ platform, url }) => {
     const itemService = new ItemService(db);
     const result = await itemService.getAllItems(page, limit, search);
     
-    // Return just the items array for compatibility with existing code
-    return json({ items: result.items });
+    // Return both items and pagination data
+    return json({
+      items: result.items,
+      pagination: result.pagination
+    });
   } catch (error) {
     console.error('Error fetching items:', error);
     return json({ error: 'Failed to fetch items' }, { status: 500 });

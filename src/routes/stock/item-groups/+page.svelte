@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import ItemGroupsTable from '$lib/components/item-groups/ItemGroupsTable.svelte';
@@ -334,48 +335,92 @@
 </script>
 
 <svelte:head>
-  <title>Item Groups Management</title>
+  <title>Item Groups Management | SNS App</title>
+  <meta name="description" content="Manage item groups for inventory categorization" />
 </svelte:head>
 
-<div class="container mx-auto px-4 py-8">
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-    <h1 class="text-2xl font-bold">Item Groups Management</h1>
-    
-    <button 
-      class="btn btn-primary"
-      on:click={openAddModal}
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-      Add Item Group
-    </button>
-  </div>
+<div class="w-full max-w-7xl mx-auto" in:fade={{ duration: 250, delay: 100 }}>
+  <!-- Page header with improved styling -->
+  <header class="mb-8">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-medium text-base-content">Item Groups Management</h1>
+        <p class="text-base-content/70 mt-1.5">Create and manage item categories for your inventory</p>
+      </div>
+      
+      <button 
+        class="btn btn-primary shadow-sm hover:shadow transition-all duration-200"
+        on:click={openAddModal}
+        aria-label="Add new item group"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        Add Item Group
+      </button>
+    </div>
+  </header>
   
-  <!-- Search and filters -->
-  <div class="card bg-base-100 shadow-xl mb-6">
-    <div class="card-body">
-      <div class="flex flex-col md:flex-row gap-4">
-        <div class="form-control flex-1">
-          <div class="input-group">
+  <!-- Search and filters with improved styling -->
+  <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm mb-8 overflow-hidden">
+    <div class="p-4">
+      <div class="flex flex-col md:flex-row gap-5 items-center justify-between">
+        <!-- Search input with improved styling -->
+        <div class="form-control w-full md:max-w-md">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
             <input 
               type="text" 
               placeholder="Search by name or code..." 
-              class="input input-bordered w-full" 
+              class="input input-bordered w-full pl-10 bg-base-100 border-base-300 focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-200" 
               bind:value={search}
               on:input={handleSearchInput}
+              aria-label="Search item groups"
             />
-            <button class="btn btn-square" aria-label="Search">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
+            {#if search}
+              <button 
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-base-content/40 hover:text-base-content transition-colors"
+                on:click={() => { search = ''; handleSearchInput(); }}
+                aria-label="Clear search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            {/if}
           </div>
         </div>
+        
+        <!-- Refresh button -->
+        <button 
+          class="btn btn-sm btn-ghost hover:bg-base-200 text-base-content/70 hover:text-base-content transition-colors" 
+          on:click={refreshItemGroups}
+          aria-label="Refresh item groups"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+          <span class="hidden sm:inline">Refresh</span>
+        </button>
       </div>
       
-      {#if pagination && pagination.total > 0}
-        <div class="mt-4">
+      <!-- Search results count -->
+      {#if search}
+        <div class="mt-3 text-sm text-base-content/70">
+          Found {pagination?.total || 0} {pagination?.total === 1 ? 'item group' : 'item groups'} matching "{search}"
+          {#if pagination?.total === 0 && search}
+            <button class="btn btn-xs btn-ghost ml-2" on:click={() => { search = ''; handleSearchInput(); }}>Clear search</button>
+          {/if}
+        </div>
+      {/if}
+      
+      <!-- Bulk actions with improved styling -->
+      {#if pagination && pagination.total > 0 && selectedIds.length > 0}
+        <div class="mt-4 pt-4 border-t border-base-200">
           <BulkActions 
             selectedIds={selectedIds} 
             totalCount={pagination.total} 
@@ -389,13 +434,36 @@
     </div>
   </div>
   
-  {#if isLoading}
-    <div class="flex justify-center my-8">
-      <span class="loading loading-spinner loading-lg"></span>
-    </div>
-  {:else}
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
+  <!-- Main content area with improved styling -->
+  <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm overflow-hidden">
+    {#if isLoading}
+      <!-- Loading state with improved styling -->
+      <div class="flex flex-col items-center justify-center py-16">
+        <div class="loading loading-spinner loading-md text-primary"></div>
+        <p class="mt-4 text-base-content/70 text-sm">Loading item groups...</p>
+      </div>
+    {:else if itemGroups.length === 0}
+      <!-- Empty state with improved styling -->
+      <div class="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <div class="bg-base-200/50 rounded-full p-4 mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-base-content/40" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-medium text-base-content mb-2">No item groups found</h3>
+        <p class="text-base-content/70 max-w-md mb-6">
+          {search ? `No item groups matching "${search}" were found.` : 'You haven\'t created any item groups yet. Item groups help you organize your inventory items.'}
+        </p>
+        <button class="btn btn-primary btn-sm" on:click={openAddModal}>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 mr-1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Create your first item group
+        </button>
+      </div>
+    {:else}
+      <!-- Table with improved styling -->
+      <div class="overflow-x-auto">
         <ItemGroupsTable 
           {itemGroups} 
           selectable={true}
@@ -403,8 +471,11 @@
           on:delete={openDeleteModal}
           on:selectionChange={handleSelectionChange}
         />
-        
-        {#if pagination && pagination.total > 0}
+      </div>
+      
+      <!-- Pagination with improved styling -->
+      {#if pagination && pagination.total > 0}
+        <div class="border-t border-base-200 p-4">
           <Pagination 
             currentPage={pagination.page} 
             totalPages={pagination.totalPages}
@@ -412,37 +483,50 @@
             total={pagination.total}
             on:pageChange={handlePageChange}
           />
-        {/if}
-      </div>
-    </div>
-  {/if}
+        </div>
+      {/if}
+    {/if}
+  </div>
 </div>
 
-<!-- Add Item Group Modal -->
-<ItemGroupForm 
-  isOpen={isAddModalOpen}
-  isEditing={false}
-  itemGroup={{ name: '', code: '' }}
-  on:close={closeAddModal}
-  on:save={saveItemGroup}
-/>
-
-<!-- Edit Item Group Modal -->
-<ItemGroupForm 
-  isOpen={isEditModalOpen}
-  isEditing={true}
-  itemGroup={currentItemGroup}
-  on:close={closeEditModal}
-  on:save={saveItemGroup}
-/>
-
-<!-- Delete Confirmation Modal -->
-<DeleteConfirmationModal 
-  isOpen={isDeleteModalOpen}
-  itemGroupId={selectedItemGroupId}
-  itemGroupName={selectedItemGroupName}
-  {isDeleting}
-  error={deleteError}
-  on:close={closeDeleteModal}
-  on:confirm={confirmDelete}
-/>
+<!-- Modals with improved styling -->
+<div aria-live="polite">
+  <!-- Add Item Group Modal with improved styling -->
+  <ItemGroupForm 
+    isOpen={isAddModalOpen}
+    isEditing={false}
+    itemGroup={{ name: '', code: '' }}
+    on:close={closeAddModal}
+    on:save={saveItemGroup}
+  />
+  
+  <!-- Edit Item Group Modal with improved styling -->
+  <ItemGroupForm 
+    isOpen={isEditModalOpen}
+    isEditing={true}
+    itemGroup={currentItemGroup}
+    on:close={closeEditModal}
+    on:save={saveItemGroup}
+  />
+  
+  <!-- Delete Confirmation Modal with improved styling -->
+  <DeleteConfirmationModal 
+    isOpen={isDeleteModalOpen}
+    itemGroupId={selectedItemGroupId}
+    itemGroupName={selectedItemGroupName}
+    {isDeleting}
+    error={deleteError}
+    on:close={closeDeleteModal}
+    on:confirm={confirmDelete}
+  />
+  
+  <!-- Bulk Delete Modal with improved styling -->
+  <BulkDeleteModal
+    isOpen={isBulkDeleteModalOpen}
+    count={selectedIds.length}
+    isDeleting={isProcessingBulk}
+    error={bulkDeleteError}
+    on:close={closeBulkDeleteModal}
+    on:confirm={confirmBulkDelete}
+  />
+</div>
