@@ -1,111 +1,125 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import type { Product } from '$lib/types/pos';
+import { ItemService } from '$lib/server/services/itemService';
+import { StockEntryService } from '$lib/server/services/stockEntryService';
 
-// Define mock products for barcode lookup
-const mockProducts = [
-  {
-    id: 'bps30-1',
-    name: "BOY'S POLO SHIRT",
-    price: 23.00,
-    category: "BOY'S POLO SHIRT",
-    barcode: 'BPS30',
-    sku: 'BPS30',
-    image: undefined,
-    inStock: 100
-  },
-  {
-    id: 'bts140-1',
-    name: "BOY'S SHORT PANT",
-    price: 10.00,
-    category: "BOY'S SHORT PANT",
-    barcode: 'BTS140',
-    sku: 'BTS140',
-    image: undefined,
-    inStock: 1100
-  },
-  {
-    id: 'bts128-1',
-    name: "BOY'S SHORT PANT - SLIM FIT",
-    price: 12.00,
-    category: "BOY'S SHORT PANT",
-    barcode: 'BTS128',
-    sku: 'BTS128',
-    image: undefined,
-    inStock: 75
-  },
-  {
-    id: 'bps18-1',
-    name: "BOY'S POLO SHIRT - PREMIUM",
-    price: 28.00,
-    category: "BOY'S POLO SHIRT",
-    barcode: 'BPS18',
-    sku: 'BPS18',
-    image: undefined,
-    inStock: 45
-  },
-  {
-    id: 'mh40-1',
-    name: "MEN'S HOODY",
-    price: 42.00,
-    category: "MEN'S WEAR",
-    barcode: 'MH40',
-    sku: 'MH40',
-    image: undefined,
-    inStock: 50
-  }
-];
-
-/**
- * Find a product by its barcode or SKU
- */
-function findProductByCode(code: string): Product | undefined {
-  // First try exact match
-  let product = mockProducts.find(p => 
-    p.barcode === code || 
-    p.sku === code
-  );
-  
-  // If no exact match, try partial match
-  if (!product) {
-    product = mockProducts.find(p => 
-      (p.barcode && p.barcode.includes(code)) || 
-      (p.sku && p.sku.includes(code))
-    );
-  }
-  
-  return product;
+// Interface for database query result
+interface ItemWithStock {
+  id: string;
+  name: string;
+  item_code: string;
+  item_group_id: string;
+  groupName: string;
+  groupCode: string;
+  quantity?: number;
+  rate?: number;
 }
 
-export const GET: RequestHandler = async ({ params }) => {
+/**
+ * Find a product by its barcode or SKU from the database
+ */
+async function findProductByCode(code: string, platform: any): Promise<Product | null> {
+  try {
+    const db = platform?.env?.DB;
+    if (!db) {
+      console.error('Database connection not available');
+      return null;
+    }
+    
+    // Initialize services
+    const itemService = new ItemService(db);
+    const stockEntryService = new StockEntryService(db);
+    
+    // Search for items by code (exact or partial match)
+    const searchResult = await itemService.getAllItems(1, 5, code);
+    
+    if (!searchResult.items || searchResult.items.length === 0) {
+      console.log(`No items found with code: ${code}`);
+      return null;
+    }
+    
+    // Get the first matching item
+    const item = searchResult.items[0] as ItemWithStock;
+    
+    // Get all stock entries for this item to determine price and stock level
+    // Using a large limit to ensure we get all entries
+    const stockEntries = await stockEntryService.getAllStockEntries(1, 1000, '');
+    let inStock = 0;
+    let price = 0;
+    
+    // Calculate total stock quantity from all entries
+    if (stockEntries && stockEntries.stockEntries) {
+      // Filter stock entries for this item
+      const itemEntries = stockEntries.stockEntries.filter(entry => entry.item_id === item.id);
+      
+      console.log(`Found ${itemEntries.length} stock entries for item ${item.name} (${item.id})`);
+      
+      // Calculate stock by summing quantities (positive for purchases, negative for sales)
+      inStock = itemEntries.reduce((total, entry) => {
+        console.log(`Entry type: ${entry.type}, quantity: ${entry.quantity}, current total: ${total}`);
+        if (entry.type === 'purchase' || entry.type === 'adjustment') {
+          return total + entry.quantity;
+        } else if (entry.type === 'sale' || entry.type === 'return') {
+          return total - entry.quantity;
+        }
+        return total;
+      }, 0);
+      
+      console.log(`Final calculated stock for ${item.name}: ${inStock}`);
+      
+      // If no entries found, default to a positive stock value
+      if (itemEntries.length === 0) {
+        console.log(`No stock entries found, defaulting to positive stock value`);
+        inStock = 10; // Default to 10 items in stock if no entries exist
+      }
+      
+      // Get the latest price from the most recent purchase entry
+      const latestPurchase = itemEntries
+        .filter(entry => entry.type === 'purchase')
+        .sort((a, b) => {
+          const dateA = a.entry_date || 0;
+          const dateB = b.entry_date || 0;
+          return dateB - dateA;
+        })[0];
+      
+      if (latestPurchase) {
+        price = latestPurchase.rate;
+      } else {
+        // Default price if no purchase entries found
+        price = item.rate || 0;
+      }
+    }
+    
+    // Map database item to Product format
+    return {
+      id: item.id,
+      name: item.name,
+      price: price,
+      category: item.groupName || 'General',
+      barcode: item.item_code,
+      sku: item.item_code,
+      image: undefined,
+      inStock: inStock
+    };
+  } catch (error) {
+    console.error('Error finding product by code:', error);
+    return null;
+  }
+}
+
+export const GET: RequestHandler = async ({ params, platform }) => {
   // Ensure code is a string and not undefined
   const code = params.code || '';
   
   try {
     console.log(`Looking up product with barcode/code: ${code}`);
     
-    // First try to find the product using the product service if available
-    try {
-      // This import is dynamic to avoid errors if the service doesn't exist
-      const { productService } = await import('$lib/server/services/pos/productService');
-      const product = await productService.getProductByBarcode(code);
-      
-      if (product) {
-        // Product name is guaranteed to be a string based on the Product interface
-        console.log(`Found product via service: ${product.name}`);
-        return json(product);
-      }
-    } catch (serviceError) {
-      console.log('Product service not available, falling back to mock data');
-      // Continue to fallback methods if service is not available
-    }
-    
-    // Fallback to mock data
-    const product = findProductByCode(code);
+    // Use our real data lookup function
+    const product = await findProductByCode(code, platform);
     
     if (product) {
-      // Product name is guaranteed to be a string based on the Product interface
-      console.log(`Found product in mock data: ${product.name}`);
+      console.log(`Found product in database: ${product.name}`);
       return json(product);
     }
     
