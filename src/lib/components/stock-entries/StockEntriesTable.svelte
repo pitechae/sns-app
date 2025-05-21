@@ -97,9 +97,10 @@
   
   // Format currency
   function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'AED',
+      currencyDisplay: 'symbol'
     }).format(amount);
   }
   
@@ -138,7 +139,7 @@
                 type="checkbox" 
                 class="checkbox" 
                 checked={selectAll} 
-                on:change={toggleSelectAll}
+                onchange={toggleSelectAll}
                 aria-label="Select all stock entries"
               />
             </label>
@@ -172,7 +173,7 @@
                     type="checkbox" 
                     class="checkbox" 
                     checked={selectedRows.has(entry.id)} 
-                    on:change={() => toggleRowSelection(entry.id)}
+                    onchange={() => toggleRowSelection(entry.id)}
                     aria-label="Select entry for {entry.item_name}"
                   />
                 </label>
@@ -197,7 +198,7 @@
               <div class="flex justify-end gap-2">
                 <button 
                   class="btn btn-sm btn-ghost" 
-                  on:click={() => handleEdit(entry)}
+                  onclick={() => handleEdit(entry)}
                   aria-label="Edit entry for {entry.item_name}"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
@@ -206,7 +207,7 @@
                 </button>
                 <button 
                   class="btn btn-sm btn-ghost text-error" 
-                  on:click={() => handleDelete(entry)}
+                  onclick={() => handleDelete(entry)}
                   aria-label="Delete entry for {entry.item_name}"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">

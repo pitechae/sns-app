@@ -10,7 +10,7 @@
   import Pagination from '$lib/components/common/Pagination.svelte';
 
   // Get data from server load function
-  export let data: PageData;
+  const data = $props() as PageData;
 
   // Define the stock entry type for TypeScript
   interface StockEntry {
@@ -28,42 +28,92 @@
     item_code: string;
   }
 
-  // Extract items for dropdown from data
-  let items = data.items || [];
+  // Define the item type for TypeScript
+  interface Item {
+    id: string;
+    name: string;
+    item_code: string;
+    item_group_id?: string;
+    created_at?: number;
+    groupName?: string;
+    groupCode?: string;
+    _id?: number;
+  }
+  
+  // Create a state variable for items
+  let itemsData = $state<Item[]>([]);
+  
+  // Function to fetch items from the API
+  async function fetchItems() {
+    try {
+      console.log('Fetching items from API...');
+      const response = await fetch('/api/stock/items?limit=100');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch items');
+      }
+      
+      const result = await response.json();
+      console.log('Fetched items from API:', result);
+      
+      if (result.items && Array.isArray(result.items)) {
+        itemsData = result.items as Item[];
+        console.log('Updated items data:', itemsData);
+      } else {
+        console.error('Invalid items data structure:', result);
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      errorToast('Failed to fetch items for dropdown');
+    }
+  }
+  
+  // Create a derived value for items to use in components
+  const items = $derived(itemsData);
+  
+  // Initial fetch of items
+  onMount(() => {
+    fetchItems();
+  });
+  
+  // Log available items for debugging
+  $effect(() => {
+    console.log('Available items for dropdown:', items);
+  });
 
-  // State for stock entries and pagination
-  let stockEntries: StockEntry[] = [];
-  let pagination: {
+  // State for stock entries and pagination using Svelte 5 reactive primitives
+  let stockEntries = $state<StockEntry[]>([]);
+  let pagination = $state<{
     page: number;
     limit: number;
     total: number;
     totalPages: number;
-  } | null = null;
+  } | null>(null);
 
   // State for UI
-  let isLoading = true;
-  let search = $page.url.searchParams.get('search') || '';
-  let showForm = false;
-  let showDeleteModal = false;
+  let isLoading = $state(true);
+  let search = $state($page.url.searchParams.get('search') || '');
+  let showForm = $state(false);
+  let showDeleteModal = $state(false);
 
   // Stock entry being edited or created
-  let editingStockEntry: {
-    id?: string;
+  let editingStockEntry = $state<{
+    id: string | undefined;
     item_id: string;
     quantity: number;
     unit: string;
     rate: number;
     type: string;
-    supplier?: string;
-    invoice_number?: string;
-    entry_date?: number;
-  } | null = null;
+    supplier: string;
+    invoice_number: string;
+    entry_date: number;
+  } | null>(null);
 
   // Stock entry to be deleted
-  let deletingStockEntry: {
+  let deletingStockEntry = $state<{
     id: string;
     item_name: string;
-  } | null = null;
+  } | null>(null);
 
   // Function to refresh stock entries data
   async function refreshStockEntries() {
@@ -86,8 +136,15 @@
       }
 
       const result = await response.json();
-      stockEntries = result.stockEntries || [];
+      console.log('API response:', result);
+      
+      // Handle the API response format correctly
+      // The API returns { entries: [...], pagination: {...} }
+      stockEntries = result.entries || [];
       pagination = result.pagination || null;
+      
+      console.log('Processed stock entries:', stockEntries);
+      console.log('Pagination:', pagination);
     } catch (error) {
       console.error('Error fetching stock entries:', error);
       errorToast('Failed to fetch stock entries');
@@ -135,12 +192,26 @@
     quantity: number;
     unit: string;
     rate: number;
-    type: string;
+    type?: string;
     supplier?: string;
     invoice_number?: string;
     entry_date?: number;
   } }>) {
     const { stockEntry } = event.detail;
+    
+    console.log('Form submission data:', stockEntry);
+    
+    // Ensure all required fields are properly set
+    const validatedEntry = {
+      ...stockEntry,
+      type: stockEntry.type || 'purchase', // Default to 'purchase' if type is undefined
+      supplier: stockEntry.supplier || '', // Ensure supplier is never undefined
+      invoice_number: stockEntry.invoice_number || '', // Ensure invoice_number is never undefined
+      entry_date: stockEntry.entry_date || Math.floor(Date.now() / 1000) // Ensure entry_date is never undefined
+    };
+    
+    console.log('Validated entry data:', validatedEntry);
+    
     isLoading = true;
     
     try {
@@ -151,12 +222,12 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(stockEntry)
+          body: JSON.stringify(validatedEntry)
         });
         
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to update stock entry');
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update stock entry');
         }
         
         successToast('Stock entry updated successfully');
@@ -167,18 +238,17 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(stockEntry)
+          body: JSON.stringify(validatedEntry)
         });
         
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to create stock entry');
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create stock entry');
         }
         
         successToast('Stock entry created successfully');
       }
       
-      // Close form and refresh data
       showForm = false;
       editingStockEntry = null;
       refreshStockEntries();
@@ -199,8 +269,8 @@
       unit: entry.unit,
       rate: entry.rate,
       type: entry.type,
-      supplier: entry.supplier,
-      invoice_number: entry.invoice_number,
+      supplier: entry.supplier || '',
+      invoice_number: entry.invoice_number || '',
       entry_date: entry.entry_date
     };
     showForm = true;
@@ -245,7 +315,17 @@
 
   // Function to add a new stock entry
   function addNewStockEntry() {
-    editingStockEntry = null;
+    editingStockEntry = {
+      id: undefined,
+      item_id: '',
+      quantity: 1,
+      unit: 'pcs',
+      rate: 0,
+      type: 'purchase',
+      supplier: '',
+      invoice_number: '',
+      entry_date: Math.floor(Date.now() / 1000)
+    };
     showForm = true;
   }
 
@@ -259,11 +339,14 @@
   <title>Stock Entries Management</title>
 </svelte:head>
 
-<div class="container mx-auto px-4 py-8">
+<div class="container mx-auto px-4 py-6">
   <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-    <h1 class="text-2xl font-bold">Stock Entries Management</h1>
+    <div>
+      <h1 class="text-2xl font-bold mb-1">Stock Entries Management</h1>
+      <p class="text-base-content/70 text-sm">Manage inventory transactions, purchases, and stock movements</p>
+    </div>
 
-    <button class="btn btn-primary" on:click={addNewStockEntry}>
+    <button class="btn btn-primary" onclick={addNewStockEntry}>
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
       </svg>
@@ -272,22 +355,43 @@
   </div>
 
   <!-- Search and filters -->
-  <div class="card bg-base-100 shadow-xl mb-6">
-    <div class="card-body">
-      <div class="flex flex-col md:flex-row gap-4">
+  <div class="card bg-base-100 shadow-sm border border-base-200 mb-6">
+    <div class="card-body p-4">
+      <div class="flex flex-col md:flex-row gap-4 items-end">
         <div class="form-control flex-1">
+          <label class="label pb-1" for="stock-search">
+            <span class="label-text font-medium">Search Stock Entries</span>
+          </label>
           <div class="input-group">
             <input
+              id="stock-search"
               type="text"
               placeholder="Search by item name, code, supplier or invoice number..."
-              class="input input-bordered w-full"
+              class="input input-bordered w-full focus:outline-primary"
               bind:value={search}
-              on:input={handleSearchInput}
+              oninput={handleSearchInput}
             />
-            <button class="btn btn-square" aria-label="Search">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <button class="btn btn-primary" aria-label="Search">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </button>
           </div>
+        </div>
+        
+        <div class="flex gap-2">
+          <select class="select select-bordered" aria-label="Filter by entry type">
+            <option value="">All Entry Types</option>
+            <option value="purchase">Purchase</option>
+            <option value="sale">Sale</option>
+            <option value="transfer">Transfer</option>
+            <option value="return">Return</option>
+            <option value="adjustment">Adjustment</option>
+          </select>
+          
+          <button class="btn btn-outline btn-square" aria-label="Refresh" onclick={refreshStockEntries}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -295,15 +399,15 @@
 
   {#if isLoading}
     <div class="flex justify-center my-8">
-      <span class="loading loading-spinner loading-lg"></span>
+      <span class="loading loading-spinner loading-lg text-primary"></span>
     </div>
   {:else}
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
+    <div class="card bg-base-100 shadow-sm border border-base-200">
+      <div class="card-body p-4">
         <StockEntriesTable
           stockEntries={stockEntries}
-          on:edit={e => handleEdit(e.detail.stockEntry)}
-          on:delete={e => handleDelete(e.detail.stockEntry)}
+          on:edit={(e) => handleEdit(e.detail.stockEntry)}
+          on:delete={(e) => handleDelete(e.detail.stockEntry)}
         />
 
         {#if pagination && pagination.total > 0}
@@ -327,13 +431,23 @@
           {editingStockEntry?.id ? 'Edit Stock Entry' : 'Add New Stock Entry'}
         </h3>
         <StockEntryForm 
-          stockEntry={editingStockEntry || undefined}
+          stockEntry={editingStockEntry || {
+            id: undefined,
+            item_id: '',
+            quantity: 1,
+            unit: 'pcs',
+            rate: 0,
+            type: 'purchase',
+            supplier: '',
+            invoice_number: '',
+            entry_date: Math.floor(Date.now() / 1000)
+          }}
           {items}
           on:submit={handleFormSubmit}
           on:close={() => showForm = false}
         />
       </div>
-      <div class="modal-backdrop" role="button" tabindex="-1" on:click={() => showForm = false} on:keydown={e => e.key === 'Escape' && (showForm = false)}></div>
+      <div class="modal-backdrop" role="button" tabindex="-1" onclick={() => showForm = false} onkeydown={e => e.key === 'Escape' && (showForm = false)}></div>
     </div>
   {/if}
 
@@ -348,19 +462,19 @@
         <div class="modal-action">
           <button 
             class="btn btn-outline" 
-            on:click={() => showDeleteModal = false}
+            onclick={() => showDeleteModal = false}
           >
             Cancel
           </button>
           <button 
             class="btn btn-error" 
-            on:click={() => deletingStockEntry && confirmDelete(deletingStockEntry.id)}
+            onclick={() => deletingStockEntry && confirmDelete(deletingStockEntry.id)}
           >
             Delete
           </button>
         </div>
       </div>
-      <div class="modal-backdrop" role="button" tabindex="-1" on:click={() => showDeleteModal = false} on:keydown={e => e.key === 'Escape' && (showDeleteModal = false)}></div>
+      <div class="modal-backdrop" role="button" tabindex="-1" onclick={() => showDeleteModal = false} onkeydown={e => e.key === 'Escape' && (showDeleteModal = false)}></div>
     </div>
   {/if}
 </div>

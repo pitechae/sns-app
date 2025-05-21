@@ -4,13 +4,12 @@
   import { clickOutside } from '$lib/actions/clickOutside';
   import { debounce } from '$lib/utils/debounce';
   
+  // Define item type for better type safety
+  type Item = Record<string, any>;
+  
   // Types
-  export let items: Array<{
-    id: string;
-    label: string;
-    value: string;
-  }> = [];
-  export let selectedItem: { id: string; label: string; value: string } | null = null;
+  export let items: Array<Item> = [];
+  export let selectedItem: Item | null = null;
   export let placeholder = 'Search...';
   export let disabled = false;
   export let required = false;
@@ -19,7 +18,8 @@
   export let maxItems = 7; // Maximum number of items to show in dropdown
   export let labelKey = 'label';
   export let valueKey = 'value';
-  export let idKey = 'id';
+  // Using const instead of let for export-only reference
+  export const idKey = 'id';
   
   // Internal state
   let searchTerm = '';
@@ -43,11 +43,26 @@
     }
     
     const lowerTerm = term.toLowerCase();
+    
+    // Log search term and available items for debugging
+    console.log('Searching for:', lowerTerm);
+    console.log('Available items:', items);
+    
+    // Improved search logic with more flexible matching
     filteredItems = items
-      .filter(item => 
-        item[labelKey].toLowerCase().includes(lowerTerm) || 
-        item[valueKey].toLowerCase().includes(lowerTerm)
-      )
+      .filter(item => {
+        // Check if the search term is in the label
+        const labelMatch = String(item[labelKey] || '').toLowerCase().includes(lowerTerm);
+        
+        // Check if the search term is in the value (item code)
+        const valueMatch = String(item[valueKey] || '').toLowerCase().includes(lowerTerm);
+        
+        // Check for partial matches in the label (for multi-word labels)
+        const labelWords = String(item[labelKey]).toLowerCase().split(/\s+/);
+        const partialLabelMatch = labelWords.some((word: string) => word.includes(lowerTerm));
+        
+        return labelMatch || valueMatch || partialLabelMatch;
+      })
       .slice(0, maxItems);
     
     if (filteredItems.length > 0) {
@@ -170,7 +185,7 @@
   }
 </script>
 
-<div class="searchable-select relative w-full" use:clickOutside on:clickoutside={handleClickOutside}>
+<div class="searchable-select relative w-full" use:clickOutside={() => (isOpen = false)}>
   <div class="input-wrapper relative">
     <input
       bind:this={inputElement}

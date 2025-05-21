@@ -3,17 +3,8 @@
   import SearchableSelect from '$lib/components/common/SearchableSelect.svelte';
   
   // Define props
-  export let stockEntry: {
-    id?: string;
-    item_id: string;
-    quantity: number;
-    unit: string;
-    rate: number;
-    type?: string;
-    supplier?: string;
-    invoice_number?: string;
-    entry_date?: number;
-  } = {
+  export let stockEntry = {
+    id: undefined as string | undefined,
     item_id: '',
     quantity: 1,
     unit: 'pcs',
@@ -63,10 +54,25 @@
       ? Math.floor(new Date(entryDate).getTime() / 1000)
       : Math.floor(Date.now() / 1000);
     
-    // Prepare data
+    // Ensure quantity is a number
+    const quantity = typeof formData.quantity === 'string' 
+      ? parseFloat(formData.quantity) 
+      : formData.quantity;
+      
+    // Ensure rate is a number
+    const rate = typeof formData.rate === 'string' 
+      ? parseFloat(formData.rate) 
+      : formData.rate;
+    
+    // Prepare data with proper types
     const submissionData = {
       ...formData,
-      entry_date: dateTimestamp
+      quantity: quantity,
+      rate: rate,
+      entry_date: dateTimestamp,
+      supplier: formData.supplier || '',
+      invoice_number: formData.invoice_number || '',
+      type: formData.type || 'purchase'
     };
     
     // Dispatch submit event
@@ -90,19 +96,30 @@
       <span class="label-text">Item *</span>
     </label>
     <SearchableSelect
-      items={items.map(item => ({
+      items={items.map((item: {id: string, name: string, item_code: string}) => ({
         id: item.id,
-        label: item.name,
+        label: `${item.name} (${item.item_code})`,
         value: item.item_code
       }))}
-      selectedItem={formData.item_id ? items.find(item => item.id === formData.item_id) ? {
-        id: items.find(item => item.id === formData.item_id)!.id,
-        label: items.find(item => item.id === formData.item_id)!.name,
-        value: items.find(item => item.id === formData.item_id)!.item_code
-      } : null : null}
-      on:select={(e) => formData.item_id = e.detail.item.id}
+      selectedItem={formData.item_id ? (() => {
+        const selectedItem = items.find((item: {id: string, name: string, item_code: string}) => item.id === formData.item_id);
+        return selectedItem ? {
+          id: selectedItem.id,
+          label: `${selectedItem.name} (${selectedItem.item_code})`,
+          value: selectedItem.item_code
+        } : null;
+      })() : null}
+      on:select={(e) => {
+        formData.item_id = e.detail.item.id;
+        // Find the selected item to get additional details if needed
+        const selectedItem = items.find((item: {id: string, name: string, item_code: string}) => item.id === e.detail.item.id);
+        if (selectedItem) {
+          console.log('Selected item:', selectedItem);
+        }
+      }}
       placeholder="Search for an item by name or code..."
       required={true}
+      maxItems={10}
       idKey="id"
       labelKey="label"
       valueKey="value"

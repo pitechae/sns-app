@@ -1,19 +1,31 @@
 import type { Action } from 'svelte/action';
 
 /**
- * Svelte action that dispatches a custom "clickoutside" event when a click occurs outside the node it's applied to.
+ * Svelte action that either dispatches a custom "clickoutside" event or calls a callback function
+ * when a click occurs outside the node it's applied to.
  * 
- * Usage:
+ * Usage with event:
  * ```svelte
  * <div use:clickOutside on:clickoutside={handleClickOutside}>
  *   <!-- content -->
  * </div>
  * ```
+ * 
+ * Usage with callback:
+ * ```svelte
+ * <div use:clickOutside={() => isOpen = false}>
+ *   <!-- content -->
+ * </div>
+ * ```
  */
-export const clickOutside: Action<HTMLElement, undefined> = (node) => {
+export const clickOutside: Action<HTMLElement, (() => void) | undefined> = (node, callback) => {
   const handleClick = (event: MouseEvent) => {
     if (node && !node.contains(event.target as Node) && !event.defaultPrevented) {
-      node.dispatchEvent(new CustomEvent('clickoutside'));
+      if (callback) {
+        callback();
+      } else {
+        node.dispatchEvent(new CustomEvent('clickoutside'));
+      }
     }
   };
 
