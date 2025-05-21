@@ -2,6 +2,32 @@ import { db } from '$lib/server/database';
 import type { Transaction, TransactionItem, PaymentMethod } from '$lib/types/pos';
 import { v4 as uuidv4 } from 'uuid';
 
+// Define database result types for better type safety
+interface DbQueryResult {
+  rows?: any[];
+  [key: string]: any;
+}
+
+interface DbTransactionRow {
+  id: string;
+  created_at: string | number | Date;
+  total: string | number;
+  payment_method: PaymentMethod;
+  status: 'completed' | 'refunded' | 'failed';
+  [key: string]: any;
+}
+
+interface DbTransactionItemRow {
+  id: string;
+  transaction_id: string;
+  product_id: string;
+  name: string;
+  price: string | number;
+  quantity: string | number;
+  sku?: string;
+  [key: string]: any;
+}
+
 /**
  * Service for handling POS transactions
  */
@@ -114,93 +140,140 @@ export class TransactionService {
    * Get all transactions with pagination
    */
   async getTransactions(page = 1, limit = 10, filter?: string): Promise<{ transactions: Transaction[], pagination: { page: number, limit: number, total: number, totalPages: number } }> {
-    // In a real implementation, this would fetch transactions from the database
-    // For now, we'll generate mock data
-    const transactions: Transaction[] = [];
-    const today = new Date();
-    
-    // Generate mock transactions
-    for (let i = 1; i <= 20; i++) {
-      const date = new Date(today);
-      date.setHours(date.getHours() - i * 2);
+    try {
+      // Query the database for transactions
+      const query = `
+        SELECT t.*, COUNT(ti.id) as item_count
+        FROM pos_transactions t
+        LEFT JOIN pos_transaction_items ti ON t.id = ti.transaction_id
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+      `;
       
-      const paymentMethod: PaymentMethod = i % 2 === 0 ? 'CARD' : 'CASH';
-      const status = i % 10 === 0 ? 'refunded' : (i % 15 === 0 ? 'failed' : 'completed');
-      const itemCount = Math.floor(Math.random() * 5) + 1;
+      const result = await db.query(query) as DbQueryResult;
       
-      transactions.push({
-        id: `TX-${(100000 + i).toString().slice(-6)}`,
-        date: date.toISOString(),
-        total: parseFloat((Math.random() * 100 + 5).toFixed(2)),
-        paymentMethod,
-        status,
-        items: Array(itemCount).fill(null).map((_, idx) => ({
-          id: uuidv4(),
-          transactionId: `TX-${(100000 + i).toString().slice(-6)}`,
-          productId: `PROD-${(idx + 1) * i}`,
-          name: `Product ${(idx + 1) * i}`,
-          price: parseFloat((Math.random() * 20 + 1).toFixed(2)),
-          quantity: Math.floor(Math.random() * 3) + 1
-        }))
-      });
-    }
-    
-    // Filter transactions if filter is provided
-    let filteredTransactions = transactions;
-    if (filter) {
-      const lowerFilter = filter.toLowerCase();
-      filteredTransactions = transactions.filter(tx => 
-        tx.id.toLowerCase().includes(lowerFilter) || 
-        tx.paymentMethod.toLowerCase().includes(lowerFilter)
-      );
-    }
-    
-    // Apply pagination
-    const total = filteredTransactions.length;
-    const totalPages = Math.ceil(total / limit);
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
-    
-    return {
-      transactions: paginatedTransactions,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages
+      if (!result || !result.rows) {
+        throw new Error('Failed to fetch transactions from database');
       }
-    };
+      
+      // Get transaction items for each transaction
+      const transactions = await Promise.all(result.rows.map(async (row: DbTransactionRow) => {
+        const itemsQuery = `
+          SELECT * FROM pos_transaction_items
+          WHERE transaction_id = $1
+        `;
+        
+        const itemsResult = await db.query(itemsQuery, [row.id]) as DbQueryResult;
+        const items = itemsResult.rows || [];
+        
+        return {
+          id: row.id,
+          date: new Date(row.created_at).toISOString(),
+          total: parseFloat(String(row.total)),
+          paymentMethod: row.payment_method,
+          status: row.status,
+          items: items.map((item: DbTransactionItemRow) => ({
+            id: item.id,
+            transactionId: item.transaction_id,
+            productId: item.product_id,
+            name: item.name,
+            price: parseFloat(String(item.price)),
+            quantity: parseInt(String(item.quantity)),
+            sku: item.sku || ''
+          }))
+        };
+      }));
+      
+      // Filter transactions if filter is provided
+      let filteredTransactions = transactions;
+      if (filter) {
+        const lowerFilter = filter.toLowerCase();
+        filteredTransactions = transactions.filter((tx: Transaction) => 
+          tx.id.toLowerCase().includes(lowerFilter) || 
+          tx.paymentMethod.toLowerCase().includes(lowerFilter)
+        );
+      }
+      
+      // Apply pagination
+      const total = filteredTransactions.length;
+      const totalPages = Math.ceil(total / limit);
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedTransactions = filteredTransactions.slice(startIndex, endIndex);
+      
+      return {
+        transactions: paginatedTransactions,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching transactions from database:', error);
+      // Return empty result on error
+      return {
+        transactions: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0
+        }
+      };
+    }
   }
   
   /**
    * Get a transaction by ID
    */
   async getTransactionById(id: string): Promise<Transaction | null> {
-    // In a real implementation, this would fetch the transaction from the database
-    // For now, we'll simulate this with a delay and return mock data
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const today = new Date();
-    const paymentMethod: PaymentMethod = id.charAt(id.length - 1) === '0' ? 'CARD' : 'CASH';
-    const status = id.charAt(id.length - 2) === '0' ? 'refunded' : 'completed';
-    const itemCount = Math.floor(Math.random() * 5) + 1;
-    
-    return {
-      id,
-      date: today.toISOString(),
-      total: parseFloat((Math.random() * 100 + 5).toFixed(2)),
-      paymentMethod,
-      status,
-      items: Array(itemCount).fill(null).map((_, idx) => ({
-        id: uuidv4(),
-        transactionId: id,
-        productId: `PROD-${idx + 1}`,
-        name: `Product ${idx + 1}`,
-        price: parseFloat((Math.random() * 20 + 1).toFixed(2)),
-        quantity: Math.floor(Math.random() * 3) + 1
-      }))
-    };
+    try {
+      // Query the database for the transaction
+      const query = `
+        SELECT * FROM pos_transactions
+        WHERE id = $1
+        LIMIT 1
+      `;
+      
+      const result = await db.query(query, [id]) as DbQueryResult;
+      
+      if (!result || !result.rows || result.rows.length === 0) {
+        return null;
+      }
+      
+      const row = result.rows[0] as DbTransactionRow;
+      
+      // Get transaction items
+      const itemsQuery = `
+        SELECT * FROM pos_transaction_items
+        WHERE transaction_id = $1
+      `;
+      
+      const itemsResult = await db.query(itemsQuery, [id]) as DbQueryResult;
+      const items = itemsResult.rows || [];
+      
+      return {
+        id: row.id,
+        date: new Date(row.created_at).toISOString(),
+        total: parseFloat(String(row.total)),
+        paymentMethod: row.payment_method as PaymentMethod,
+        status: row.status as 'completed' | 'refunded' | 'failed',
+        items: items.map((item: DbTransactionItemRow) => ({
+          id: item.id,
+          transactionId: item.transaction_id,
+          productId: item.product_id,
+          name: item.name,
+          price: parseFloat(String(item.price)),
+          quantity: parseInt(String(item.quantity)),
+          sku: item.sku || ''
+        }))
+      };
+    } catch (error) {
+      console.error('Error fetching transaction by ID:', error);
+      return null;
+    }
   }
 }
 

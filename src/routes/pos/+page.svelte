@@ -226,57 +226,13 @@
     } catch (err: any) {
       console.error('Error loading products:', err);
       const errorMessage = err?.message || 'Unknown error';
-      error = `Unable to connect to inventory system: ${errorMessage}. Using demo data.`;
+      error = `Unable to connect to inventory system: ${errorMessage}. Please check your connection and try again.`;
       setTimeout(() => { error = null; }, 5000);
       
-      // Fallback to demo data based on real stock entries
-      products = [
-        {
-          id: 'bps30-1',
-          name: "BOY'S POLO SHIRT",
-          price: 23.00,
-          category: "BOY'S POLO SHIRT",
-          barcode: 'BPS30',
-          sku: 'BPS30',
-          image: undefined,
-          inStock: 100
-        },
-        {
-          id: 'bts140-1',
-          name: "BOY'S SHORT PANT",
-          price: 10.00,
-          category: "BOY'S SHORT PANT",
-          barcode: 'BTS140',
-          sku: 'BTS140',
-          image: undefined,
-          inStock: 1100
-        },
-        {
-          id: 'bps30-2',
-          name: "BOY'S POLO SHIRT",
-          price: 23.00,
-          category: "BOY'S POLO SHIRT",
-          barcode: 'BPS30',
-          sku: 'BPS30',
-          image: undefined,
-          inStock: 20
-        },
-        {
-          id: 'bps30-3',
-          name: "BOY'S POLO SHIRT",
-          price: 23.00,
-          category: "BOY'S POLO SHIRT",
-          barcode: 'BPS30',
-          sku: 'BPS30',
-          image: undefined,
-          inStock: 120
-        }
-      ];
-      
-      // Extract unique categories from mock data
-      const categorySet = new Set(products.map(p => p.category));
-      categories = Array.from(categorySet);
-      page = 1;
+      // No fallback to mock data - only use real data
+      products = [];
+      categories = [];
+      currentPage = 1;
       totalPages = 1;
     } finally {
       isLoadingProducts = false;

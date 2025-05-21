@@ -22,7 +22,7 @@ export interface Product {
 export interface Transaction {
   id: string;
   date: string;
-  timestamp: number;
+  timestamp?: number; // Making timestamp optional for compatibility with database records
   total: number;
   paymentMethod: PaymentMethod;
   status: TransactionStatus;
