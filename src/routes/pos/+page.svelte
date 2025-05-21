@@ -40,8 +40,8 @@
   // Business info for receipts
   const businessInfo = {
     name: 'Smart & Style UAQ Branch',
-    address: 'Mall Of - Green Belt - Umm Al Quwain',
-    phone: '050 973 9042',
+    address: 'Mall Of Green Belt, Umm Al Quwain',
+    phone: '+971 50 973 9042',
     email: ''
   };
   
@@ -639,7 +639,7 @@
             <div class="item">
               <div class="item-name">${item.name}</div>
               <div class="item-qty">${item.quantity}</div>
-              <div class="item-price">AED ${formatPrice(item.price * item.quantity)}</div>
+              <div class="item-price">د.إ ${formatPrice(item.price * item.quantity)}</div>
             </div>
             <div class="item">
               <div class="item-name"></div>
@@ -651,7 +651,7 @@
           <div class="divider"></div>
           <div class="item total">
             <div>TOTAL</div>
-            <div>AED ${formatPrice(transaction.total)}</div>
+            <div>د.إ ${formatPrice(transaction.total)}</div>
           </div>
           <div class="item">
             <div>PAYMENT</div>
