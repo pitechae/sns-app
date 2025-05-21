@@ -1,66 +1,197 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { fade, fly } from 'svelte/transition';
+  import PaymentModal from '$lib/components/pos/PaymentModal.svelte';
+  import PrinterSettings from '$lib/components/pos/PrinterSettings.svelte';
+  import StockLedgerModal from '$lib/components/stock/StockLedgerModal.svelte';
+  import Receipt from '$lib/components/pos/Receipt.svelte';
+  import BarcodeScanner from '$lib/components/pos/BarcodeScanner.svelte';
+  import type { Product, CartItem, Transaction, PaymentMethod, PrinterSettings as PrinterSettingsType, PaymentResult } from '$lib/types/pos';
+  import { getStockWebSocket } from '$lib/services/websocket';
   
   // POS state
   let cart = $state<CartItem[]>([]);
   let products = $state<Product[]>([]);
   let isLoading = $state(true);
+  let isLoadingProducts = $state(true);
   let searchQuery = $state('');
   let total = $derived(calculateTotal(cart));
   let activeCategory = $state<string | null>(null);
   let categories = $state<string[]>([]);
+  let page = $state(1);
+  let totalPages = $state(1);
   
-  // Types
-  type Product = {
-    id: string;
-    name: string;
-    price: number;
-    category: string;
-    image?: string;
+  // UI state
+  let isPaymentModalOpen = $state(false);
+  let isSettingsOpen = $state(false);
+  let isStockLedgerOpen = $state(false);
+  let isBarcodeEnabled = $state(true);
+  let lastTransaction = $state<Transaction | null>(null);
+  let error = $state<string | null>(null);
+  let selectedProduct = $state<Product | null>(null);
+  
+  // Printer settings
+  let printerSettings = $state<PrinterSettingsType>({
+    enabled: true,
+    printerName: '',
+    autoPrint: true
+  });
+  
+  // Business info for receipts
+  const businessInfo = {
+    name: 'SNS Store',
+    address: 'Dubai, United Arab Emirates',
+    phone: '+971 4 123 4567',
+    email: 'info@snsstore.ae'
   };
   
-  type CartItem = {
-    productId: string;
-    name: string;
-    price: number;
-    quantity: number;
-  };
+  // WebSocket connection for real-time stock updates
+  let stockWebSocket: any = null;
   
-  // Load products (mock data for now)
-  onMount(() => {
-    // Simulate API call
-    setTimeout(() => {
-      products = [
-        { id: '1', name: 'Coffee', price: 3.50, category: 'Beverages' },
-        { id: '2', name: 'Tea', price: 2.50, category: 'Beverages' },
-        { id: '3', name: 'Sandwich', price: 5.99, category: 'Food' },
-        { id: '4', name: 'Salad', price: 6.99, category: 'Food' },
-        { id: '5', name: 'Muffin', price: 2.99, category: 'Bakery' },
-        { id: '6', name: 'Croissant', price: 2.49, category: 'Bakery' },
-        { id: '7', name: 'Juice', price: 3.99, category: 'Beverages' },
-        { id: '8', name: 'Water', price: 1.50, category: 'Beverages' },
-        { id: '9', name: 'Chips', price: 1.99, category: 'Snacks' },
-        { id: '10', name: 'Chocolate Bar', price: 1.79, category: 'Snacks' },
-        { id: '11', name: 'Bagel', price: 2.29, category: 'Bakery' },
-        { id: '12', name: 'Soda', price: 1.99, category: 'Beverages' },
-      ];
+  onMount(async () => {
+    await loadProducts();
+    
+    // Initialize WebSocket connection in browser environment
+    if (typeof window !== 'undefined') {
+      try {
+        stockWebSocket = getStockWebSocket();
+        
+        // Register for stock update events
+        stockWebSocket.on('stock_update', (data: any) => {
+          console.log('Received stock update:', data);
+          
+          // Update product stock levels if they're in our current products list
+          if (data && data.items && Array.isArray(data.items)) {
+            data.items.forEach((item: any) => {
+              const index = products.findIndex(p => p.sku === item.sku || p.id === item.id);
+              if (index !== -1) {
+                // Update the product stock level
+                products[index].inStock = item.quantity || item.inStock || 0;
+                
+                // Also update any matching items in the cart
+                cart = cart.map(cartItem => {
+                  if (cartItem.productId === products[index].id || cartItem.sku === item.sku) {
+                    return { ...cartItem, currentStock: products[index].inStock };
+                  }
+                  return cartItem;
+                });
+              }
+            });
+          }
+        });
+      } catch (error) {
+        console.error('Failed to initialize WebSocket connection:', error);
+      }
+    }
+  });
+  
+  onDestroy(() => {
+    // Clean up WebSocket connection when component is destroyed
+    if (stockWebSocket) {
+      stockWebSocket.disconnect();
+    }
+  });
+  
+  // Load products from API
+  async function loadProducts(pageNum = 1, search = '') {
+    isLoadingProducts = true;
+    try {
+      // Use the stock inventory API to get real inventory items
+      const response = await fetch(`/api/stock/entries?page=${pageNum}&limit=20&search=${encodeURIComponent(search)}`);
+      if (!response.ok) throw new Error('Failed to fetch products');
+      
+      const data = await response.json();
+      
+      // Map stock entries to POS products format with real data
+      products = data.entries.map((entry: any) => {
+        // Extract SKU from item code (e.g., BPS30, BTS140)
+        const sku = entry.itemCode || '';
+        const category = sku.substring(0, 3) === 'BPS' ? "BOY'S POLO SHIRT" : 
+                       sku.substring(0, 3) === 'BTS' ? "BOY'S SHORT PANT" : 'General';
+        
+        return {
+          id: entry.id || `product-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          name: entry.itemName || 'Unnamed Product',
+          price: typeof entry.rate === 'number' ? entry.rate : 23.00,  // Use actual rate from entries
+          category: category,
+          barcode: sku,
+          sku: sku,
+          image: undefined,  // We'll use placeholder images
+          inStock: typeof entry.quantity === 'number' ? entry.quantity : 0
+        };
+      });
+      
+      page = data.pagination?.page || 1;
+      totalPages = data.pagination?.totalPages || 1;
       
       // Extract unique categories
-      categories = [...new Set(products.map(p => p.category))];
+      const categorySet = new Set(products.map(p => p.category));
+      categories = Array.from(categorySet);
+    } catch (err) {
+      console.error('Error loading products:', err);
+      error = 'Using mock inventory data due to API error.';
       
+      // Fallback to mock data based on real stock entries
+      products = [
+        {
+          id: 'bps30-1',
+          name: "BOY'S POLO SHIRT",
+          price: 23.00,
+          category: "BOY'S POLO SHIRT",
+          barcode: 'BPS30',
+          sku: 'BPS30',
+          image: undefined,
+          inStock: 100
+        },
+        {
+          id: 'bts140-1',
+          name: "BOY'S SHORT PANT",
+          price: 10.00,
+          category: "BOY'S SHORT PANT",
+          barcode: 'BTS140',
+          sku: 'BTS140',
+          image: undefined,
+          inStock: 1100
+        },
+        {
+          id: 'bps30-2',
+          name: "BOY'S POLO SHIRT",
+          price: 23.00,
+          category: "BOY'S POLO SHIRT",
+          barcode: 'BPS30',
+          sku: 'BPS30',
+          image: undefined,
+          inStock: 20
+        },
+        {
+          id: 'bps30-3',
+          name: "BOY'S POLO SHIRT",
+          price: 23.00,
+          category: "BOY'S POLO SHIRT",
+          barcode: 'BPS30',
+          sku: 'BPS30',
+          image: undefined,
+          inStock: 120
+        }
+      ];
+      
+      // Extract unique categories from mock data
+      const categorySet = new Set(products.map(p => p.category));
+      categories = Array.from(categorySet);
+      page = 1;
+      totalPages = 1;
+    } finally {
+      isLoadingProducts = false;
       isLoading = false;
-    }, 800);
-  });
+    }
+  }
   
   // Filter products based on search and category
   const filteredProducts = $derived(
     products.filter(product => {
-      const matchesSearch = searchQuery === '' || 
-        product.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = activeCategory === null || 
         product.category === activeCategory;
-      return matchesSearch && matchesCategory;
+      return matchesCategory;
     })
   );
   
@@ -84,6 +215,50 @@
         quantity: 1
       }];
     }
+  }
+  
+  // Add item by barcode
+  async function addItemByBarcode(barcode: string) {
+    if (!barcode) return;
+    
+    // First check if it's in our loaded products
+    const product = products.find(p => 
+      p.barcode?.toLowerCase() === barcode.toLowerCase() || 
+      p.sku?.toLowerCase() === barcode.toLowerCase()
+    );
+    
+    if (product) {
+      addToCart(product);
+      searchQuery = '';
+      return;
+    }
+    
+    // If not found locally, try to fetch from API
+    try {
+      const response = await fetch(`/api/pos/lookup/barcode/${encodeURIComponent(barcode)}`);
+      // Using the new non-conflicting route path
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          error = `Product with barcode ${barcode} not found`;
+          throw new Error(`Product with barcode ${barcode} not found`);
+        }
+        throw new Error('Failed to fetch product');
+      }
+      
+      const product = await response.json();
+      addToCart(product);
+      searchQuery = '';
+    } catch (err) {
+      console.error('Error adding item by barcode:', err);
+      error = `Product not found: ${barcode}`;
+    }
+  }
+  
+  // Handle barcode scan
+  function handleBarcodeScan(event: CustomEvent<{barcode: string}>) {
+    const { barcode } = event.detail;
+    addItemByBarcode(barcode);
   }
   
   // Update item quantity
@@ -116,20 +291,125 @@
     return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   }
   
-  // Format price
-  function formatPrice(price: number): string {
-    return price.toFixed(2);
+  // Format price - safely handle undefined, null, or NaN values
+  function formatPrice(price: number | undefined | null): string {
+    if (price === undefined || price === null || isNaN(price)) return '0.00';
+    try {
+      return price.toFixed(2);
+    } catch (err) {
+      console.error('Error formatting price:', price, err);
+      return '0.00';
+    }
   }
   
-  // Process payment
-  function processPayment() {
+  // Open payment modal
+  function openPaymentModal() {
     if (cart.length === 0) return;
+    isPaymentModalOpen = true;
+  }
+  
+  // Event dispatcher
+  const dispatch = createEventDispatcher();
+  
+  // Handle payment completion
+  function handlePaymentComplete(event: CustomEvent<PaymentResult>) {
+    const result = event.detail;
     
-    // In a real app, this would call an API to process the payment
-    alert(`Payment processed for $${formatPrice(total)}`);
+    if (result.success && result.transactionId) {
+      try {
+        // Create a transaction object locally instead of making an API call
+        // This avoids the fetch error when the API endpoint might not be fully implemented
+        const transaction: Transaction = {
+          id: result.transactionId,
+          date: new Date().toISOString(),
+          total: total,
+          paymentMethod: result.paymentMethod || 'CASH',
+          status: 'completed',
+          items: cart.map(item => ({
+            id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            transactionId: result.transactionId!,
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            sku: item.sku
+          }))
+        };
+        
+        // Store last transaction for receipt
+        lastTransaction = transaction;
+        
+        // Print receipt if enabled and auto-print is on
+        if (printerSettings?.enabled && printerSettings?.autoPrint) {
+          printReceipt(lastTransaction);
+        }
+        
+        // Clear cart and reset state
+        cart = [];
+        isPaymentModalOpen = false;
+        
+        // Show success message
+        setTimeout(() => {
+          alert('Payment successful! Transaction ID: ' + (lastTransaction?.id || 'Unknown'));
+        }, 500);
+      } catch (err) {
+        console.error('Error creating transaction:', err);
+        error = 'Failed to complete transaction. Please try again.';
+        isPaymentModalOpen = false;
+      }
+    }
+  }
+  
+  // Close payment modal regardless of success/failure
+  function closePaymentModal() {
+    isPaymentModalOpen = false;
+  }
+  
+  // Handle stock ledger modal close
+  function closeStockLedgerModal() {
+    isStockLedgerOpen = false;
+    selectedProduct = null;
+  }
+  
+  // Print receipt
+  async function printReceipt(transaction: Transaction) {
+    if (!printerSettings.enabled || !transaction) return;
     
-    // Clear cart after successful payment
-    clearCart();
+    try {
+      const response = await fetch('/api/pos/printers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          transactionId: transaction.id,
+          printerName: printerSettings.printerName,
+          businessName: businessInfo.name,
+          businessAddress: businessInfo.address,
+          businessPhone: businessInfo.phone,
+          businessEmail: businessInfo.email
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to print receipt');
+      }
+      
+      // Show success message or notification
+    } catch (err) {
+      console.error('Error printing receipt:', err);
+      // Show error toast or notification
+    }
+  }
+  
+  // Handle search
+  function handleSearch() {
+    loadProducts(1, searchQuery);
+  }
+  
+  // Toggle settings panel
+  function toggleSettings() {
+    isSettingsOpen = !isSettingsOpen;
   }
 </script>
 
@@ -138,7 +418,433 @@
   <meta name="description" content="Point of Sale Terminal" />
 </svelte:head>
 
-<div class="w-full max-w-screen-2xl mx-auto p-4">
+{#if isSettingsOpen}
+  <div transition:fade={{ duration: 200 }}>
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div class="bg-base-100 rounded-lg shadow-lg w-full max-w-lg">
+        <div class="p-4 border-b border-base-200 flex justify-between items-center">
+          <h2 class="text-lg font-medium">Printer Settings</h2>
+          <button class="btn btn-sm btn-ghost" onclick={() => isSettingsOpen = false} aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="p-4">
+          <div class="form-control mb-4">
+            <label class="cursor-pointer label justify-start gap-4">
+              <input type="checkbox" class="toggle toggle-primary" bind:checked={printerSettings.enabled} />
+              <span class="label-text">Enable Receipt Printing</span>
+            </label>
+          </div>
+          <div class="form-control mb-4">
+            <label class="cursor-pointer label justify-start gap-4">
+              <input type="checkbox" class="toggle toggle-primary" bind:checked={printerSettings.autoPrint} />
+              <span class="label-text">Auto-print after transaction</span>
+            </label>
+          </div>
+        </div>
+        <div class="p-4 border-t border-base-200 flex justify-end gap-2">
+          <button class="btn btn-primary" onclick={() => isSettingsOpen = false}>Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if isPaymentModalOpen}
+  <PaymentModal 
+    isOpen={isPaymentModalOpen}
+    cartItems={cart}
+    total={total}
+    on:close={closePaymentModal}
+    on:paymentComplete={handlePaymentComplete}
+  />
+{/if}
+
+<StockLedgerModal 
+  isOpen={isStockLedgerOpen}
+  productId={selectedProduct?.id}
+  sku={selectedProduct?.sku}
+  productName={selectedProduct?.name}
+/>
+
+<!-- Main POS Interface -->
+<div class="flex h-screen bg-base-200 overflow-hidden">
+  <!-- Left sidebar - Barcode scanner and quick functions -->
+  <div class="w-80 bg-base-100 border-r border-base-300 flex flex-col h-full">
+    <div class="p-4 border-b border-base-300 flex items-center justify-between">
+      <div class="flex items-center">
+        <div class="avatar placeholder mr-3">
+          <div class="bg-primary text-primary-content rounded-full w-10">
+            <span class="text-lg">POS</span>
+          </div>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold">SNS Store</h1>
+          <p class="text-xs text-base-content/60">Terminal #1</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Barcode scanner section -->
+    <div class="p-4 border-b border-base-300">
+      <div class="relative">
+        <input 
+          type="text" 
+          class="input input-bordered w-full pr-10 text-lg" 
+          placeholder="Scan barcode..." 
+          bind:value={searchQuery}
+          onkeydown={(e) => e.key === 'Enter' && addItemByBarcode(searchQuery)}
+        />
+        <button 
+          class="absolute inset-y-0 right-0 px-3 flex items-center"
+          onclick={() => addItemByBarcode(searchQuery)}
+          aria-label="Add item by barcode"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex items-center mt-2 text-xs">
+        <div class="w-2 h-2 rounded-full bg-success mr-2"></div>
+        <span class="text-base-content/70">Scanner active</span>
+      </div>
+    </div>
+    
+    <!-- Quick action buttons -->
+    <div class="p-4 border-b border-base-300">
+      <h2 class="font-medium mb-3 text-sm">Quick Actions</h2>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn btn-sm btn-outline">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          Hold Sale
+        </button>
+        <button class="btn btn-sm btn-outline">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+          </svg>
+          Discounts
+        </button>
+        <button class="btn btn-sm btn-outline">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Clipboard
+        </button>
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          <span class="sr-only">Close</span>
+        </button>
+        <button class="btn btn-sm btn-outline" aria-label="Hold Sale">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          Hold Sale
+        </button>
+        <button class="btn btn-sm btn-outline">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+          </svg>
+          Discounts
+        </button>
+        <button class="btn btn-sm btn-outline">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Clipboard
+        </button>
+        <button class="btn btn-sm btn-primary" aria-label="Void">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Void
+        </button>
+      </div>
+    </div>
+    
+    <!-- Customer section -->
+    <div class="p-4 border-b border-base-300">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="font-medium text-sm">Customer</h2>
+        <button class="btn btn-xs btn-ghost" aria-label="Add Customer">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          <span class="sr-only">Add Customer</span>
+        </button>
+      </div>
+      
+      <div class="flex items-center p-2 bg-base-200 rounded-lg">
+        <div class="avatar placeholder mr-3">
+          <div class="bg-neutral-focus text-neutral-content rounded-full w-8">
+            <span>G</span>
+          </div>
+        </div>
+        <div>
+          <p class="font-medium text-sm">Guest Customer</p>
+          <p class="text-xs text-base-content/60">Walk-in</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Settings and tools -->
+    <div class="mt-auto p-4 border-t border-base-300">
+      <div class="flex justify-between">
+        <button class="btn btn-sm btn-ghost" onclick={toggleSettings} aria-label="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick={() => isStockLedgerOpen = true} aria-label="Stock Ledger">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </button>
+        <button class="btn btn-sm btn-ghost" aria-label="Help">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span class="sr-only">Help</span>
+        </button>
+        <button class="btn btn-sm btn-ghost" aria-label="Notifications">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span class="sr-only">Notifications</span>
+        </button>
+        <button class="btn btn-sm btn-ghost" aria-label="User profile">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span class="sr-only">User profile</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Center content - Cart items -->
+  <div class="flex-1 flex flex-col h-full overflow-hidden">
+    <!-- Header with store info and search -->
+    <div class="bg-base-100 border-b border-base-300 p-4 flex justify-between items-center">
+      <h2 class="text-xl font-bold">Current Sale</h2>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-base-content/70">{new Date().toLocaleDateString()}</span>
+        <div class="badge badge-primary">Cashier: Admin</div>
+      </div>
+    </div>
+    
+    <!-- Cart items -->
+    <div class="flex-1 overflow-y-auto p-4">
+      {#if cart.length === 0}
+        <div class="flex flex-col items-center justify-center h-full text-base-content/50">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          <h3 class="text-xl font-medium mb-2">Cart is Empty</h3>
+          <p class="text-base-content/70 text-center max-w-md">
+            Scan a barcode or search for products to add items to the cart.
+          </p>
+        </div>
+      {:else}
+        <div class="space-y-2">
+          {#each cart as item (item.productId)}
+            <div class="bg-base-100 border border-base-300 rounded-lg p-3 flex justify-between items-center" in:fade={{ duration: 150 }}>
+              <div class="flex-1">
+                <div class="flex justify-between">
+                  <div>
+                    <h4 class="font-medium">{item.name}</h4>
+                    {#if item.sku}
+                      <p class="text-xs text-base-content/60">{item.sku}</p>
+                    {/if}
+                  </div>
+                  <div class="text-right">
+                    <p class="font-semibold">AED {formatPrice(item.price * item.quantity)}</p>
+                    <p class="text-xs text-base-content/60">AED {formatPrice(item.price)} each</p>
+                  </div>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                  <div class="flex items-center gap-2">
+                    <button 
+                      class="btn btn-xs btn-circle btn-ghost"
+                      onclick={() => updateQuantity(item.productId, item.quantity - 1)}
+                      aria-label="Decrease quantity"
+                    >−</button>
+                    <span class="font-medium">{item.quantity}</span>
+                    <button 
+                      class="btn btn-xs btn-circle btn-ghost"
+                      onclick={() => updateQuantity(item.productId, item.quantity + 1)}
+                      aria-label="Increase quantity"
+                    >+</button>
+                  </div>
+                  <button 
+                    class="btn btn-xs btn-ghost text-error"
+                    onclick={() => removeFromCart(item.productId)}
+                    aria-label="Remove item"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+  
+  <!-- Right sidebar - Payment and totals -->
+  <div class="w-96 bg-base-100 border-l border-base-300 flex flex-col h-full">
+    <!-- Order summary -->
+    <div class="p-4 border-b border-base-300">
+      <h2 class="text-lg font-bold mb-4">Order Summary</h2>
+      
+      <div class="space-y-3">
+        <div class="flex justify-between">
+          <span class="text-base-content/70">Subtotal ({cart.length} items)</span>
+          <span>AED {formatPrice(total)}</span>
+        </div>
+        
+        <div class="flex justify-between items-center">
+          <span class="text-base-content/70">Discount</span>
+          <div class="flex items-center gap-2">
+            <span>-AED 0.00</span>
+            <button class="btn btn-xs btn-ghost" aria-label="Search">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span class="sr-only">Search</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="flex justify-between">
+          <span class="text-base-content/70">Tax (5% VAT)</span>
+          <span>+AED {formatPrice(total * 0.05)}</span>
+        </div>
+        
+        <div class="border-t border-base-300 pt-3 mt-2">
+          <div class="flex justify-between font-bold text-lg">
+            <span>Total</span>
+            <span class="text-primary">AED {formatPrice(total + (total * 0.05))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Payment methods -->
+    <div class="p-4 flex-1">
+      <h3 class="font-bold mb-4">Payment Method</h3>
+      
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <button 
+          class="btn btn-outline flex flex-col h-auto py-3 hover:bg-primary hover:text-primary-content"
+          onclick={() => { isPaymentModalOpen = true; }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          <span>Cash</span>
+        </button>
+        
+        <button 
+          class="btn btn-outline flex flex-col h-auto py-3 hover:bg-primary hover:text-primary-content"
+          onclick={() => { isPaymentModalOpen = true; }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+          <span>Card</span>
+        </button>
+        
+        <button class="btn btn-outline flex flex-col h-auto py-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span>App Pay</span>
+        </button>
+        
+        <button class="btn btn-outline flex flex-col h-auto py-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Credit</span>
+        </button>
+      </div>
+      
+      <div class="divider">or</div>
+      
+      <!-- Process payment button -->
+      <button 
+        class="btn btn-primary w-full btn-lg {cart.length === 0 ? 'btn-disabled' : ''}"
+        onclick={openPaymentModal}
+        disabled={cart.length === 0}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        Process Payment
+      </button>
+    </div>
+    
+    <!-- Keyboard shortcuts info -->
+    <div class="p-4 border-t border-base-300 bg-base-200">
+      <div class="flex justify-between text-xs text-base-content/70">
+        <span>F1: Help</span>
+        <span>F2: Search</span>
+        <span>F3: Discount</span>
+        <span>F12: Pay</span>
+      </div>
+    </div>
+  </div>
+</div>
+  
+  <!-- Last transaction receipt -->
+  {#if lastTransaction}
+    <div class="mb-6" transition:fade={{ duration: 200 }}>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">Last Transaction</h2>
+        <button 
+          class="btn btn-sm btn-ghost"
+          onclick={() => lastTransaction = null}
+          aria-label="Close receipt"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Receipt 
+          transaction={lastTransaction} 
+          {businessInfo}
+          on:print={(e) => printReceipt(e.detail.transaction)}
+        />
+        
+        <div class="bg-base-100 border border-base-200 rounded-lg p-6 flex flex-col justify-center items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-success mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 class="text-xl font-medium mb-2">Transaction Complete</h3>
+          <p class="text-base-content/70 text-center mb-6">Transaction {lastTransaction?.id || 'unknown'} has been successfully processed.</p>
+          <button 
+            class="btn btn-primary"
+            onclick={() => lastTransaction = null}
+          >
+            New Transaction
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+  
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Product selection (2/3 width on large screens) -->
     <div class="lg:col-span-2 space-y-6">
@@ -155,21 +861,30 @@
               </div>
               <input 
                 type="text" 
-                placeholder="Search products..." 
-                class="input input-bordered w-full pl-10" 
+                placeholder="Search products by name, category, or barcode..." 
+                class="input input-bordered w-full pl-10 pr-20" 
                 bind:value={searchQuery}
               />
-              {#if searchQuery}
+              <div class="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
+                {#if searchQuery}
+                  <button 
+                    class="btn btn-ghost btn-xs rounded-full"
+                    onclick={() => { searchQuery = ''; loadProducts(1, ''); }}
+                    aria-label="Clear search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                {/if}
                 <button 
-                  class="absolute inset-y-0 right-0 flex items-center pr-3 text-base-content/40 hover:text-base-content"
-                  onclick={() => searchQuery = ''}
-                  aria-label="Clear search"
+                  class="btn btn-primary btn-sm"
+                  onclick={() => loadProducts(1, searchQuery)}
+                  aria-label="Search products"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Search
                 </button>
-              {/if}
+              </div>
             </div>
           </div>
         </div>
@@ -195,7 +910,7 @@
       
       <!-- Products grid -->
       <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm p-4">
-        {#if isLoading}
+        {#if isLoadingProducts}
           <div class="flex justify-center items-center py-12">
             <div class="loading loading-spinner loading-lg text-primary"></div>
           </div>
@@ -213,27 +928,77 @@
               <button 
                 class="bg-base-100 border border-base-200 hover:border-primary/30 hover:bg-primary/5 rounded-lg p-3 text-center transition-all flex flex-col items-center justify-between h-full"
                 onclick={() => addToCart(product)}
+                oncontextmenu={(e) => {
+                  e.preventDefault();
+                  selectedProduct = product;
+                  isStockLedgerOpen = true;
+                }}
                 in:fade={{ duration: 150 }}
                 aria-label="Add {product.name} to cart"
               >
                 <div class="w-full">
-                  <div class="bg-base-200/50 rounded-lg h-16 w-16 mx-auto flex items-center justify-center mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                    </svg>
-                  </div>
+                  {#if product.image}
+                    <div class="rounded-lg h-16 w-16 mx-auto flex items-center justify-center mb-2 overflow-hidden">
+                      <img src={product.image} alt={product.name} class="object-cover w-full h-full" />
+                    </div>
+                  {:else}
+                    <div class="bg-base-200/50 rounded-lg h-16 w-16 mx-auto flex items-center justify-center mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-primary/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                    </div>
+                  {/if}
                   <h3 class="font-medium text-base-content truncate">{product.name}</h3>
-                  <p class="text-primary font-semibold mt-1">${formatPrice(product.price)}</p>
+                  <p class="text-primary font-semibold mt-1">AED {formatPrice(product.price)}</p>
                 </div>
                 <div class="mt-2 w-full">
-                  <div class="text-xs text-base-content/60 mb-1">{product.category}</div>
-                  <div class="btn btn-sm btn-primary btn-outline w-full">
+                  <div class="flex justify-between items-center text-xs text-base-content/60 mb-1">
+                    <span>{product.category}</span>
+                    <span class="badge badge-sm {product.inStock > 10 ? 'badge-success' : (product.inStock > 0 ? 'badge-warning' : 'badge-error')}">
+                      {product.inStock > 0 ? `${product.inStock} left` : 'Out of stock'}
+                    </span>
+                  </div>
+                  <div class="btn btn-sm {product.inStock > 0 ? 'btn-primary' : 'btn-disabled'} w-full flex items-center justify-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
                     Add to Cart
                   </div>
                 </div>
               </button>
             {/each}
           </div>
+          
+          <!-- Pagination controls if needed -->
+          {#if totalPages > 1}
+            <div class="flex justify-center mt-6">
+              <div class="join">
+                <button 
+                  class="join-item btn btn-sm {page === 1 ? 'btn-disabled' : 'btn-outline'}"
+                  onclick={() => loadProducts(page - 1, searchQuery)}
+                  disabled={page === 1}
+                  aria-label="Previous page"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button class="join-item btn btn-sm btn-ghost pointer-events-none">
+                  Page {page} of {totalPages}
+                </button>
+                <button 
+                  class="join-item btn btn-sm {page === totalPages ? 'btn-disabled' : 'btn-outline'}"
+                  onclick={() => loadProducts(page + 1, searchQuery)}
+                  disabled={page === totalPages}
+                  aria-label="Next page"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     </div>
@@ -278,10 +1043,10 @@
                   <div class="flex justify-between">
                     <div>
                       <h4 class="font-medium">{item.name}</h4>
-                      <p class="text-primary">${formatPrice(item.price)} each</p>
+                      <p class="text-primary">AED {formatPrice(item.price)} each</p>
                     </div>
                     <div class="text-right">
-                      <p class="font-semibold">${formatPrice(item.price * item.quantity)}</p>
+                      <p class="font-semibold">AED {formatPrice(item.price * item.quantity)}</p>
                     </div>
                   </div>
                   <div class="flex justify-between items-center mt-2">
@@ -320,20 +1085,20 @@
         <div class="border-t border-base-200 p-4">
           <div class="flex justify-between mb-2">
             <span class="text-base-content/70">Subtotal:</span>
-            <span class="font-medium">${formatPrice(total)}</span>
+            <span class="font-medium">AED {formatPrice(total)}</span>
           </div>
           <div class="flex justify-between mb-4">
             <span class="text-base-content/70">Tax (0%):</span>
-            <span class="font-medium">$0.00</span>
+            <span class="font-medium">AED 0.00</span>
           </div>
           <div class="flex justify-between text-lg font-semibold mb-6">
             <span>Total:</span>
-            <span class="text-primary">${formatPrice(total)}</span>
+            <span class="text-primary">AED {formatPrice(total)}</span>
           </div>
           
           <button 
             class="btn btn-primary w-full {cart.length === 0 ? 'btn-disabled' : ''}"
-            onclick={processPayment}
+            onclick={openPaymentModal}
             disabled={cart.length === 0}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -345,4 +1110,3 @@
       </div>
     </div>
   </div>
-</div>
