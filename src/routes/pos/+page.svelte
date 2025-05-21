@@ -470,39 +470,39 @@
 />
 
 <!-- Main POS Interface -->
-<div class="flex h-screen bg-base-200 overflow-hidden">
+<div class="flex h-screen bg-base-100 mb-4 overflow-hidden">
   <!-- Left sidebar - Barcode scanner and quick functions -->
-  <div class="w-80 bg-base-100 border-r border-base-300 flex flex-col h-full">
-    <div class="p-4 border-b border-base-300 flex items-center justify-between">
+  <div class="w-80 border-r border-base-200 flex flex-col h-full">
+    <div class="p-4 border-b border-base-200 flex items-center justify-between">
       <div class="flex items-center">
-        <div class="avatar placeholder mr-3">
-          <div class="bg-primary text-primary-content rounded-full w-10">
-            <span class="text-lg">POS</span>
-          </div>
+        <div class="text-primary mr-3">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+          </svg>
         </div>
         <div>
-          <h1 class="text-lg font-bold">SNS Store</h1>
-          <p class="text-xs text-base-content/60">Terminal #1</p>
+          <h1 class="font-medium text-lg">POS Terminal</h1>
+          <p class="text-xs text-base-content/70">Ready for transactions</p>
         </div>
       </div>
     </div>
     
     <!-- Barcode scanner section -->
-    <div class="p-4 border-b border-base-300">
+    <div class="p-4 border-b border-base-200">
       <div class="relative">
         <input 
           type="text" 
-          class="input input-bordered w-full pr-10 text-lg" 
+          class="w-full pr-10 text-base border-b-2 border-primary/30 focus:border-primary bg-transparent py-2 px-1 outline-none transition-colors" 
           placeholder="Scan barcode..." 
           bind:value={searchQuery}
           onkeydown={(e) => e.key === 'Enter' && addItemByBarcode(searchQuery)}
         />
         <button 
-          class="absolute inset-y-0 right-0 px-3 flex items-center"
+          class="absolute inset-y-0 right-0 px-1 flex items-center text-primary"
           onclick={() => addItemByBarcode(searchQuery)}
           aria-label="Add item by barcode"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
         </button>
@@ -514,54 +514,32 @@
     </div>
     
     <!-- Quick action buttons -->
-    <div class="p-4 border-b border-base-300">
-      <h2 class="font-medium mb-3 text-sm">Quick Actions</h2>
+    <div class="p-4 border-b border-base-200">
+      <div class="text-sm font-medium mb-3 text-base-content/70">Quick Actions</div>
       <div class="grid grid-cols-2 gap-2">
-        <button class="btn btn-sm btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <button class="flex items-center p-2 border-b-2 border-primary/70 bg-base-100 hover:bg-base-200 transition-colors rounded">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
           </svg>
-          Hold Sale
+          <span class="text-sm">Hold Sale</span>
         </button>
-        <button class="btn btn-sm btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <button class="flex items-center p-2 border-b-2 border-warning/70 bg-base-100 hover:bg-base-200 transition-colors rounded">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
           </svg>
-          Discounts
+          <span class="text-sm">Discounts</span>
         </button>
-        <button class="btn btn-sm btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <button class="flex items-center p-2 border-b-2 border-info/70 bg-base-100 hover:bg-base-200 transition-colors rounded">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
-          Clipboard
+          <span class="text-sm">Clipboard</span>
         </button>
-        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          <span class="sr-only">Close</span>
-        </button>
-        <button class="btn btn-sm btn-outline" aria-label="Hold Sale">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        <button class="flex items-center p-2 border-b-2 border-secondary/70 bg-base-100 hover:bg-base-200 transition-colors rounded">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
-          Hold Sale
-        </button>
-        <button class="btn btn-sm btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
-          </svg>
-          Discounts
-        </button>
-        <button class="btn btn-sm btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          Clipboard
-        </button>
-        <button class="btn btn-sm btn-primary" aria-label="Void">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          Void
+          <span class="text-sm">Void Sale</span>
         </button>
       </div>
     </div>
@@ -578,49 +556,52 @@
         </button>
       </div>
       
-      <div class="flex items-center p-2 bg-base-200 rounded-lg">
-        <div class="avatar placeholder mr-3">
-          <div class="bg-neutral-focus text-neutral-content rounded-full w-8">
-            <span>G</span>
-          </div>
+      <div class="flex items-center p-3 border-l-4 border-secondary bg-base-100 rounded">
+        <div class="text-secondary mr-3">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          </svg>
         </div>
         <div>
-          <p class="font-medium text-sm">Guest Customer</p>
-          <p class="text-xs text-base-content/60">Walk-in</p>
+          <p class="text-sm font-medium">Guest Customer</p>
+          <p class="text-xs text-base-content/70">Walk-in</p>
         </div>
       </div>
     </div>
     
     <!-- Settings and tools -->
-    <div class="mt-auto p-4 border-t border-base-300">
-      <div class="flex justify-between">
-        <button class="btn btn-sm btn-ghost" onclick={toggleSettings} aria-label="Settings">
+    <div class="mt-auto p-4 border-t border-base-200">
+      <div class="grid grid-cols-5 gap-2">
+        <button class="flex flex-col items-center justify-center p-2 text-primary hover:bg-base-200 rounded transition-colors" onclick={toggleSettings} aria-label="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
+          <span class="text-xs mt-1">Settings</span>
         </button>
-        <button class="btn btn-sm btn-ghost" onclick={() => isStockLedgerOpen = true} aria-label="Stock Ledger">
+        <button class="flex flex-col items-center justify-center p-2 text-info hover:bg-base-200 rounded transition-colors" onclick={() => isStockLedgerOpen = true} aria-label="Stock Ledger">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
+          <span class="text-xs mt-1">Ledger</span>
         </button>
-        <button class="btn btn-sm btn-ghost" aria-label="Help">
+        <button class="flex flex-col items-center justify-center p-2 text-warning hover:bg-base-200 rounded transition-colors" aria-label="Help">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span class="sr-only">Help</span>
+          <span class="text-xs mt-1">Help</span>
         </button>
-        <button class="btn btn-sm btn-ghost" aria-label="Notifications">
+        <button class="flex flex-col items-center justify-center p-2 text-error hover:bg-base-200 rounded transition-colors" aria-label="Notifications">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
           </svg>
-          <span class="sr-only">Notifications</span>
+          <span class="text-xs mt-1">Alerts</span>
         </button>
-        <button class="btn btn-sm btn-ghost" aria-label="User profile">
+        <button class="flex flex-col items-center justify-center p-2 text-secondary hover:bg-base-200 rounded transition-colors" aria-label="User profile">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
+          <span class="text-xs mt-1">Profile</span>
           <span class="sr-only">User profile</span>
         </button>
       </div>
@@ -845,46 +826,42 @@
     </div>
   {/if}
   
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <!-- Product selection (2/3 width on large screens) -->
-    <div class="lg:col-span-2 space-y-6">
+    <div class="lg:col-span-2 space-y-4">
       <!-- Search and categories -->
-      <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm p-4">
-        <div class="flex flex-col md:flex-row gap-4">
+      <div class="p-4 border-l-4 border-primary bg-base-100 rounded">
+        <div class="flex flex-col md:flex-row gap-3">
           <!-- Search input -->
-          <div class="form-control flex-1">
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input 
-                type="text" 
-                placeholder="Search products by name, category, or barcode..." 
-                class="input input-bordered w-full pl-10 pr-20" 
-                bind:value={searchQuery}
-              />
-              <div class="absolute inset-y-0 right-0 flex items-center space-x-1 pr-2">
-                {#if searchQuery}
-                  <button 
-                    class="btn btn-ghost btn-xs rounded-full"
-                    onclick={() => { searchQuery = ''; loadProducts(1, ''); }}
-                    aria-label="Clear search"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                {/if}
+          <div class="flex-1 relative">
+            <input 
+              type="text" 
+              placeholder="Search products..." 
+              class="w-full pr-10 text-base border-b-2 border-primary/30 focus:border-primary bg-transparent py-2 px-1 outline-none transition-colors" 
+              bind:value={searchQuery}
+              onkeydown={(e) => e.key === 'Enter' && loadProducts(1, searchQuery)}
+            />
+            <div class="absolute inset-y-0 right-0 flex items-center gap-1 pr-1">
+              {#if searchQuery}
                 <button 
-                  class="btn btn-primary btn-sm"
-                  onclick={() => loadProducts(1, searchQuery)}
-                  aria-label="Search products"
+                  class="p-1 text-base-content/60 hover:text-error transition-colors rounded-full"
+                  onclick={() => { searchQuery = ''; loadProducts(1, ''); }}
+                  aria-label="Clear search"
                 >
-                  Search
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
-              </div>
+              {/if}
+              <button 
+                class="p-1 text-primary hover:text-primary/80 transition-colors"
+                onclick={() => loadProducts(1, searchQuery)}
+                aria-label="Search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -892,14 +869,14 @@
         <!-- Categories -->
         <div class="flex flex-wrap gap-2 mt-4">
           <button 
-            class="btn btn-sm {activeCategory === null ? 'btn-primary' : 'btn-ghost'}"
+            class="px-3 py-1 text-sm rounded {activeCategory === null ? 'bg-secondary text-secondary-content' : 'bg-base-200 hover:bg-base-300 transition-colors'}"
             onclick={() => activeCategory = null}
           >
             All
           </button>
           {#each categories as category}
             <button 
-              class="btn btn-sm {activeCategory === category ? 'btn-primary' : 'btn-ghost'}"
+              class="px-3 py-1 text-sm rounded {activeCategory === category ? 'bg-secondary text-secondary-content' : 'bg-base-200 hover:bg-base-300 transition-colors'}"
               onclick={() => activeCategory = category}
             >
               {category}
@@ -909,24 +886,34 @@
       </div>
       
       <!-- Products grid -->
-      <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm p-4">
+      <div class="p-4 border-l-4 border-secondary bg-base-100 rounded">
         {#if isLoadingProducts}
-          <div class="flex justify-center items-center py-12">
-            <div class="loading loading-spinner loading-lg text-primary"></div>
+          <div class="flex justify-center items-center py-8">
+            <div class="loading loading-spinner loading-md text-secondary"></div>
           </div>
         {:else if filteredProducts.length === 0}
-          <div class="flex flex-col items-center justify-center py-12 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-base-content/40 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h3 class="text-lg font-medium">No products found</h3>
-            <p class="text-base-content/60 mt-1">Try changing your search or category filter</p>
+            <h3 class="text-base font-medium mb-1">No products found</h3>
+            <p class="text-sm text-base-content/70 max-w-md">
+              {searchQuery ? `No products matching "${searchQuery}" were found.` : 'No products available in this category.'}
+            </p>
+            {#if searchQuery}
+              <button 
+                class="mt-3 px-3 py-1 text-sm border border-base-300 rounded hover:bg-base-200 transition-colors"
+                onclick={() => { searchQuery = ''; loadProducts(1, ''); }}
+              >
+                Clear search
+              </button>
+            {/if}
           </div>
         {:else}
           <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {#each filteredProducts as product (product.id)}
               <button 
-                class="bg-base-100 border border-base-200 hover:border-primary/30 hover:bg-primary/5 rounded-lg p-3 text-center transition-all flex flex-col items-center justify-between h-full"
+                class="bg-base-100 border border-base-200 hover:border-secondary/30 hover:bg-secondary/5 rounded-lg p-3 text-center transition-all flex flex-col items-center justify-between h-full"
                 onclick={() => addToCart(product)}
                 oncontextmenu={(e) => {
                   e.preventDefault();
@@ -1005,19 +992,19 @@
     
     <!-- Cart and checkout (1/3 width on large screens) -->
     <div class="lg:col-span-1">
-      <div class="bg-base-100 border border-base-200 rounded-lg shadow-sm h-full flex flex-col">
+      <div class="border-l-4 border-error bg-base-100 rounded h-full flex flex-col">
         <!-- Cart header -->
         <div class="p-4 border-b border-base-200">
           <div class="flex justify-between items-center">
-            <h2 class="text-lg font-medium flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            <h2 class="text-base font-medium flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Cart
             </h2>
             {#if cart.length > 0}
               <button 
-                class="btn btn-sm btn-ghost text-error"
+                class="px-2 py-1 text-xs text-error hover:bg-error/10 rounded transition-colors"
                 onclick={clearCart}
               >
                 Clear All
@@ -1029,49 +1016,57 @@
         <!-- Cart items -->
         <div class="flex-grow overflow-y-auto p-4 {cart.length === 0 ? 'flex items-center justify-center' : ''}">
           {#if cart.length === 0}
-            <div class="text-center text-base-content/60 py-8">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div class="text-center text-base-content/70 py-6">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto text-base-content/30 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <p class="text-base">Your cart is empty</p>
-              <p class="text-sm mt-1">Add items to get started</p>
+              <p class="text-sm font-medium">Your cart is empty</p>
+              <p class="text-xs mt-1">Add items to get started</p>
             </div>
           {:else}
             <ul class="space-y-3">
               {#each cart as item (item.productId)}
-                <li class="border border-base-200 rounded-lg p-3" in:fly={{ y: 10, duration: 200 }}>
+                <li class="border-b border-base-200 p-3" in:fly={{ y: 10, duration: 200 }}>
                   <div class="flex justify-between">
                     <div>
-                      <h4 class="font-medium">{item.name}</h4>
-                      <p class="text-primary">AED {formatPrice(item.price)} each</p>
+                      <h4 class="text-sm font-medium">{item.name}</h4>
+                      <p class="text-xs text-base-content/70">{item.sku || 'No SKU'}</p>
                     </div>
                     <div class="text-right">
-                      <p class="font-semibold">AED {formatPrice(item.price * item.quantity)}</p>
+                      <p class="text-sm font-medium">AED {formatPrice(item.price * item.quantity)}</p>
+                      <p class="text-xs text-base-content/70">AED {formatPrice(item.price)} each</p>
                     </div>
                   </div>
                   <div class="flex justify-between items-center mt-2">
-                    <div class="join">
+                    <div class="flex items-center border border-base-200 rounded">
                       <button 
-                        class="join-item btn btn-xs btn-outline"
+                        class="px-2 py-1 text-base-content/70 hover:text-error transition-colors"
                         onclick={() => updateQuantity(item.productId, item.quantity - 1)}
+                        disabled={item.quantity <= 1}
                         aria-label="Decrease quantity"
-                      >-</button>
-                      <button class="join-item btn btn-xs btn-ghost pointer-events-none" aria-label="Current quantity">
-                        {item.quantity}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 12H4" />
+                        </svg>
                       </button>
+                      <span class="w-8 text-center text-sm">{item.quantity}</span>
                       <button 
-                        class="join-item btn btn-xs btn-outline"
+                        class="px-2 py-1 text-base-content/70 hover:text-primary transition-colors"
                         onclick={() => updateQuantity(item.productId, item.quantity + 1)}
                         aria-label="Increase quantity"
-                      >+</button>
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
                     </div>
                     <button 
-                      class="btn btn-xs btn-ghost text-error"
+                      class="p-1 text-base-content/40 hover:text-error transition-colors"
                       onclick={() => removeFromCart(item.productId)}
-                      aria-label="Remove item from cart"
+                      aria-label="Remove item"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   </div>
@@ -1081,28 +1076,28 @@
           {/if}
         </div>
         
-        <!-- Cart totals and checkout -->
-        <div class="border-t border-base-200 p-4">
+        <!-- Checkout section -->
+        <div class="p-4 border-t border-base-200 bg-base-100/50">
           <div class="flex justify-between mb-2">
-            <span class="text-base-content/70">Subtotal:</span>
-            <span class="font-medium">AED {formatPrice(total)}</span>
+            <span class="text-sm text-base-content/70">Subtotal:</span>
+            <span class="text-sm">AED {formatPrice(total)}</span>
           </div>
           <div class="flex justify-between mb-4">
-            <span class="text-base-content/70">Tax (0%):</span>
-            <span class="font-medium">AED 0.00</span>
+            <span class="text-sm text-base-content/70">Tax (0%):</span>
+            <span class="text-sm">AED 0.00</span>
           </div>
-          <div class="flex justify-between text-lg font-semibold mb-6">
+          <div class="flex justify-between font-medium mb-4 pb-2 border-b border-base-200">
             <span>Total:</span>
-            <span class="text-primary">AED {formatPrice(total)}</span>
+            <span class="text-error">AED {formatPrice(total)}</span>
           </div>
           
           <button 
-            class="btn btn-primary w-full {cart.length === 0 ? 'btn-disabled' : ''}"
+            class="w-full py-3 px-4 bg-error text-error-content rounded flex items-center justify-center transition-colors hover:bg-error/90 {cart.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
             onclick={openPaymentModal}
             disabled={cart.length === 0}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             Process Payment
           </button>

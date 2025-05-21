@@ -159,7 +159,7 @@
     transition:fade={{ duration: 200 }}
   >
     <div 
-      class="bg-base-100 rounded-lg shadow-lg w-full max-w-lg overflow-hidden"
+      class="bg-base-100 border-l-4 border-error rounded w-full max-w-lg overflow-hidden"
       onclick={(e) => e.stopPropagation()}
       onkeydown={() => {}}
       role="dialog"
@@ -169,46 +169,55 @@
       transition:fly={{ y: 20, duration: 200 }}
     >
       <!-- Modal header -->
-      <div class="p-4 border-b border-base-200">
-        <h2 id="payment-modal-title" class="text-xl font-semibold">Payment</h2>
+      <div class="p-4 border-b border-base-200 flex justify-between items-center">
+        <h2 id="payment-modal-title" class="text-lg font-medium">Payment</h2>
+        <button 
+          class="p-1 text-base-content/40 hover:text-error transition-colors" 
+          onclick={closeModal}
+          aria-label="Close modal"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
       
       <!-- Modal body -->
       <div class="p-4">
         <!-- Payment summary -->
-        <div class="mb-6">
-          <h3 class="text-lg font-medium mb-2">Order Summary</h3>
-          <div class="bg-base-200 rounded-lg p-3">
+        <div class="mb-4">
+          <h3 class="text-sm font-medium mb-2 text-base-content/70">Order Summary</h3>
+          <div class="border border-base-200 rounded p-3">
             <div class="flex justify-between mb-2">
-              <span class="text-base-content/70">Items:</span>
-              <span>{cartItems.length}</span>
+              <span class="text-sm text-base-content/70">Items:</span>
+              <span class="text-sm">{cartItems.length}</span>
             </div>
-            <div class="flex justify-between font-semibold text-lg">
+            <div class="flex justify-between font-medium border-t border-base-200 pt-2 mt-2">
               <span>Total:</span>
-              <span>${formatPrice(total)}</span>
+              <span class="text-error">AED {formatPrice(total)}</span>
             </div>
           </div>
         </div>
         
         <!-- Payment method selection -->
-        <div class="mb-6">
-          <h3 class="text-lg font-medium mb-2">Payment Method</h3>
+        <div class="mb-4">
+          <h3 class="text-sm font-medium mb-2 text-base-content/70">Payment Method</h3>
           <div class="flex gap-2">
             <button 
-              class="btn flex-1 {paymentMethod === 'CASH' ? 'btn-primary' : 'btn-outline'}"
+              class="flex-1 py-2 px-3 rounded flex items-center justify-center transition-colors {paymentMethod === 'CASH' ? 'bg-error/10 border-error text-error' : 'border border-base-200 hover:bg-base-200/50'}"
               onclick={() => handlePaymentMethodChange('CASH')}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               Cash
             </button>
             <button 
-              class="btn flex-1 {paymentMethod === 'CARD' ? 'btn-primary' : 'btn-outline'}"
+              class="flex-1 py-2 px-3 rounded flex items-center justify-center transition-colors {paymentMethod === 'CARD' ? 'bg-error/10 border-error text-error' : 'border border-base-200 hover:bg-base-200/50'}"
               onclick={() => handlePaymentMethodChange('CARD')}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
               </svg>
               Card
             </button>
@@ -217,18 +226,18 @@
         
         <!-- Payment details -->
         {#if paymentMethod === 'CASH'}
-          <div class="mb-6">
-            <h3 class="text-lg font-medium mb-2">Cash Payment</h3>
-            <div class="form-control">
-              <label class="label" for="cash-amount">
-                <span class="label-text">Cash Amount</span>
+          <div class="mb-4">
+            <h3 class="text-sm font-medium mb-2 text-base-content/70">Cash Payment</h3>
+            <div class="mb-2">
+              <label class="text-xs mb-1 inline-block text-base-content/70" for="cash-amount">
+                Cash Amount
               </label>
-              <div class="input-group">
-                <span>$</span>
+              <div class="flex border border-base-200 rounded overflow-hidden">
+                <span class="bg-base-200/50 px-2 flex items-center text-sm">AED</span>
                 <input 
                   id="cash-amount"
                   type="number" 
-                  class="input input-bordered w-full" 
+                  class="flex-1 py-2 px-2 text-sm focus:outline-none" 
                   placeholder="0.00"
                   min={total}
                   step="0.01"
@@ -239,32 +248,32 @@
             </div>
             
             {#if cashAmount >= total}
-              <div class="mt-4 p-3 bg-success/10 text-success rounded-lg">
-                <div class="flex justify-between font-medium">
-                  <span>Change Due:</span>
-                  <span>${formatPrice(changeDue)}</span>
+              <div class="mt-3 p-2 border-l-4 border-success bg-success/5 rounded">
+                <div class="flex justify-between text-sm">
+                  <span class="font-medium">Change Due:</span>
+                  <span class="text-success font-medium">AED {formatPrice(changeDue)}</span>
                 </div>
               </div>
             {:else if cashAmount > 0}
-              <div class="mt-4 p-3 bg-warning/10 text-warning rounded-lg">
-                <div class="flex justify-between font-medium">
-                  <span>Remaining:</span>
-                  <span>${formatPrice(total - cashAmount)}</span>
+              <div class="mt-3 p-2 border-l-4 border-warning bg-warning/5 rounded">
+                <div class="flex justify-between text-sm">
+                  <span class="font-medium">Remaining:</span>
+                  <span class="text-warning font-medium">AED {formatPrice(total - cashAmount)}</span>
                 </div>
               </div>
             {/if}
           </div>
         {:else}
-          <div class="mb-6">
-            <h3 class="text-lg font-medium mb-2">Card Payment</h3>
-            <div class="form-control mb-3">
-              <label class="label" for="card-number">
-                <span class="label-text">Card Number</span>
+          <div class="mb-4">
+            <h3 class="text-sm font-medium mb-2 text-base-content/70">Card Payment</h3>
+            <div class="mb-3">
+              <label class="text-xs mb-1 inline-block text-base-content/70" for="card-number">
+                Card Number
               </label>
               <input 
                 id="card-number"
                 type="text" 
-                class="input input-bordered w-full" 
+                class="w-full py-2 px-3 text-sm border border-base-200 rounded focus:outline-none focus:border-error/30" 
                 placeholder="1234 5678 9012 3456"
                 maxlength="19"
                 value={cardNumber}
@@ -272,15 +281,15 @@
               />
             </div>
             
-            <div class="grid grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label" for="card-expiry">
-                  <span class="label-text">Expiry (MM/YY)</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs mb-1 inline-block text-base-content/70" for="card-expiry">
+                  Expiry (MM/YY)
                 </label>
                 <input 
                   id="card-expiry"
                   type="text" 
-                  class="input input-bordered w-full" 
+                  class="w-full py-2 px-3 text-sm border border-base-200 rounded focus:outline-none focus:border-error/30" 
                   placeholder="MM/YY"
                   maxlength="5"
                   value={cardExpiry}
@@ -288,14 +297,14 @@
                 />
               </div>
               
-              <div class="form-control">
-                <label class="label" for="card-cvc">
-                  <span class="label-text">CVC</span>
+              <div>
+                <label class="text-xs mb-1 inline-block text-base-content/70" for="card-cvc">
+                  CVC
                 </label>
                 <input 
                   id="card-cvc"
                   type="text" 
-                  class="input input-bordered w-full" 
+                  class="w-full py-2 px-3 text-sm border border-base-200 rounded focus:outline-none focus:border-error/30" 
                   placeholder="123"
                   maxlength="3"
                   bind:value={cardCvc}
@@ -307,30 +316,40 @@
         
         <!-- Error message -->
         {#if error}
-          <div class="alert alert-error mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{error}</span>
+          <div class="mb-4 p-2 border-l-4 border-error bg-error/5 text-error rounded text-sm">
+            <div class="flex items-start">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mt-0.5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{error}</span>
+            </div>
           </div>
         {/if}
       </div>
       
       <!-- Modal footer -->
-      <div class="p-4 border-t border-base-200 flex justify-end gap-3">
+      <div class="p-4 border-t border-base-200 flex justify-end gap-2">
         <button 
-          class="btn btn-ghost"
+          class="px-4 py-2 text-sm text-base-content/70 hover:bg-base-200 rounded transition-colors"
           onclick={closeModal}
           disabled={isProcessing}
         >
           Cancel
         </button>
         <button 
-          class="btn btn-primary {isProcessing ? 'loading' : ''}"
+          class="px-4 py-2 text-sm bg-error text-error-content rounded transition-colors hover:bg-error/90 flex items-center {isProcessing ? 'opacity-70' : ''}"
           onclick={processPayment}
           disabled={!isPaymentValid || isProcessing}
         >
-          {isProcessing ? 'Processing...' : 'Complete Payment'}
+          {#if isProcessing}
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-error-content" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Processing...
+          {:else}
+            Complete Payment
+          {/if}
         </button>
       </div>
     </div>
