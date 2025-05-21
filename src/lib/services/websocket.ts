@@ -146,6 +146,18 @@ export class WebSocketService {
       return false;
     }
   }
+  
+  /**
+   * Emit an event to the WebSocket server
+   * This is an alias for send() that formats the data with an event type
+   */
+  public emit(eventType: string, data: any = {}): boolean {
+    const message = {
+      type: eventType,
+      ...data
+    };
+    return this.send(message);
+  }
 
   /**
    * Register a callback for a specific event type

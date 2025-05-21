@@ -22,6 +22,7 @@ export interface Product {
 export interface Transaction {
   id: string;
   date: string;
+  timestamp: number;
   total: number;
   paymentMethod: PaymentMethod;
   status: TransactionStatus;
@@ -59,6 +60,7 @@ export interface PrinterSettings {
   enabled: boolean;
   printerName: string;
   autoPrint: boolean;
+  useServerPrinting?: boolean;
 }
 
 /**
@@ -70,7 +72,7 @@ export interface CartItem {
   price: number;
   quantity: number;
   sku?: string;
-  currentStock?: number;
+  currentStock: number; // Track current available stock
 }
 
 /**

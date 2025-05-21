@@ -25,9 +25,12 @@ export class TransactionService {
     
     // Store transaction items
     for (const item of transaction.items) {
+      // Create a new object without transactionId to avoid duplication
+      const { transactionId: _, ...itemWithoutTransactionId } = item;
+      
       await this.createTransactionItem({
-        transactionId: id,
-        ...item
+        transactionId: id,  // Use the transaction ID from this transaction
+        ...itemWithoutTransactionId
       });
       
       // Update inventory (decrease quantity)
@@ -45,7 +48,12 @@ export class TransactionService {
     
     const newItem: TransactionItem = {
       id,
-      ...item
+      transactionId: item.transactionId,
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      sku: item.sku
     };
     
     // In a real implementation, this would insert the item into the database
@@ -59,9 +67,47 @@ export class TransactionService {
    * Update inventory after a sale
    */
   private async updateInventory(productId: string, quantity: number): Promise<void> {
-    // In a real implementation, this would update the inventory in the database
-    // For now, we'll simulate this with a delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      // First, get the current product details
+      const response = await fetch(`/api/stock/items/${productId}`);
+      if (!response.ok) {
+        console.error(`Failed to fetch product ${productId} for inventory update`);
+        return;
+      }
+      
+      const product = await response.json();
+      
+      // Create a stock transaction to record the inventory change
+      const stockTransaction = {
+        itemId: productId,
+        type: 'Sale', // This is a sale transaction
+        quantity: -quantity, // Negative quantity for sales/outgoing inventory
+        notes: `POS sale transaction`
+      };
+      
+      // Send the stock transaction to update inventory
+      const updateResponse = await fetch('/api/stock/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(stockTransaction)
+      });
+      
+      if (!updateResponse.ok) {
+        console.error(`Failed to update inventory for product ${productId}`);
+      }
+      
+      // Broadcast the stock update via WebSocket if available
+      try {
+        // This would be implemented in a real system
+        // For now we'll rely on the WebSocket connection established in the POS component
+      } catch (wsError) {
+        console.error('WebSocket broadcast error:', wsError);
+      }
+    } catch (error) {
+      console.error('Error updating inventory:', error);
+    }
   }
   
   /**

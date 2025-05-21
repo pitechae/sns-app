@@ -2,10 +2,88 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import type { Product } from '$lib/types/pos';
 
-export const GET = async ({ params }) => {
-  const { code } = params;
+// Define mock products for barcode lookup
+const mockProducts = [
+  {
+    id: 'bps30-1',
+    name: "BOY'S POLO SHIRT",
+    price: 23.00,
+    category: "BOY'S POLO SHIRT",
+    barcode: 'BPS30',
+    sku: 'BPS30',
+    image: undefined,
+    inStock: 100
+  },
+  {
+    id: 'bts140-1',
+    name: "BOY'S SHORT PANT",
+    price: 10.00,
+    category: "BOY'S SHORT PANT",
+    barcode: 'BTS140',
+    sku: 'BTS140',
+    image: undefined,
+    inStock: 1100
+  },
+  {
+    id: 'bts128-1',
+    name: "BOY'S SHORT PANT - SLIM FIT",
+    price: 12.00,
+    category: "BOY'S SHORT PANT",
+    barcode: 'BTS128',
+    sku: 'BTS128',
+    image: undefined,
+    inStock: 75
+  },
+  {
+    id: 'bps18-1',
+    name: "BOY'S POLO SHIRT - PREMIUM",
+    price: 28.00,
+    category: "BOY'S POLO SHIRT",
+    barcode: 'BPS18',
+    sku: 'BPS18',
+    image: undefined,
+    inStock: 45
+  },
+  {
+    id: 'mh40-1',
+    name: "MEN'S HOODY",
+    price: 42.00,
+    category: "MEN'S WEAR",
+    barcode: 'MH40',
+    sku: 'MH40',
+    image: undefined,
+    inStock: 50
+  }
+];
+
+/**
+ * Find a product by its barcode or SKU
+ */
+function findProductByCode(code: string): Product | undefined {
+  // First try exact match
+  let product = mockProducts.find(p => 
+    p.barcode === code || 
+    p.sku === code
+  );
+  
+  // If no exact match, try partial match
+  if (!product) {
+    product = mockProducts.find(p => 
+      (p.barcode && p.barcode.includes(code)) || 
+      (p.sku && p.sku.includes(code))
+    );
+  }
+  
+  return product;
+}
+
+export const GET: RequestHandler = async ({ params }) => {
+  // Ensure code is a string and not undefined
+  const code = params.code || '';
   
   try {
+    console.log(`Looking up product with barcode/code: ${code}`);
+    
     // First try to find the product using the product service if available
     try {
       // This import is dynamic to avoid errors if the service doesn't exist
@@ -13,92 +91,27 @@ export const GET = async ({ params }) => {
       const product = await productService.getProductByBarcode(code);
       
       if (product) {
+        // Product name is guaranteed to be a string based on the Product interface
+        console.log(`Found product via service: ${product.name}`);
         return json(product);
       }
     } catch (serviceError) {
-      console.log('Product service not available, falling back to stock API');
+      console.log('Product service not available, falling back to mock data');
       // Continue to fallback methods if service is not available
     }
     
-    // Fallback: Try to find the product in the stock entries
-    const stockResponse = await fetch(`http://localhost:5173/api/stock/entries?search=${code}`);
-    
-    if (stockResponse.ok) {
-      const stockData = await stockResponse.json();
-      
-      if (stockData.entries && stockData.entries.length > 0) {
-        // Find the entry with matching barcode/itemCode
-        const entry = stockData.entries.find((e: any) => 
-          e.itemCode === code || 
-          e.barcode === code
-        );
-        
-        if (entry) {
-          // Map stock entry to product format
-          const sku = entry.itemCode || code;
-          const category = sku.substring(0, 3) === 'BPS' ? "BOY'S POLO SHIRT" : 
-                         sku.substring(0, 3) === 'BTS' ? "BOY'S SHORT PANT" : 
-                         sku.substring(0, 3) === 'MH' ? "MEN'S HOODY" : 'General';
-          
-          const product: Product = {
-            id: entry.id || `product-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            name: entry.itemName || 'Unnamed Product',
-            price: typeof entry.rate === 'number' ? entry.rate : 23.00,
-            category: category,
-            barcode: code,
-            sku: sku,
-            image: undefined,
-            inStock: typeof entry.quantity === 'number' ? entry.quantity : 0
-          };
-          
-          return json(product);
-        }
-      }
-    }
-    
-    // Fallback: Use mock data if not found in stock entries
-    const mockProducts = [
-      {
-        id: 'bps30-1',
-        name: "BOY'S POLO SHIRT",
-        price: 23.00,
-        category: "BOY'S POLO SHIRT",
-        barcode: 'BPS30',
-        sku: 'BPS30',
-        image: undefined,
-        inStock: 100
-      },
-      {
-        id: 'bts140-1',
-        name: "BOY'S SHORT PANT",
-        price: 10.00,
-        category: "BOY'S SHORT PANT",
-        barcode: 'BTS140',
-        sku: 'BTS140',
-        image: undefined,
-        inStock: 1100
-      },
-      {
-        id: 'mh40-1',
-        name: "MEN'S HOODY",
-        price: 42.00,
-        category: "MEN'S WEAR",
-        barcode: 'MH40',
-        sku: 'MH40',
-        image: undefined,
-        inStock: 50
-      }
-    ];
-    
-    // Find product with matching barcode
-    const product = mockProducts.find(p => p.barcode === code || p.sku === code);
+    // Fallback to mock data
+    const product = findProductByCode(code);
     
     if (product) {
+      // Product name is guaranteed to be a string based on the Product interface
+      console.log(`Found product in mock data: ${product.name}`);
       return json(product);
     }
     
     // If product not found, return 404
-    return new Response(JSON.stringify({ error: 'Product not found' }), {
+    console.log(`Product with code ${code} not found`);
+    return new Response(JSON.stringify({ error: `Product with barcode ${code} not found` }), {
       status: 404,
       headers: {
         'Content-Type': 'application/json'

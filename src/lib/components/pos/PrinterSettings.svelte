@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import type { PrinterSettings } from '$lib/types/pos';
+  
+  // Event dispatcher
+  const dispatch = createEventDispatcher();
   
   // Props
   export let settings: PrinterSettings = {
     enabled: true,
-    autoPrint: true
+    printerName: '',
+    autoPrint: true,
+    useServerPrinting: false
   };
   
   // State
@@ -49,6 +54,42 @@
   function handlePrinterChange(event: Event) {
     const select = event.target as HTMLSelectElement;
     settings.printerName = select.value;
+  }
+  
+  // Print test receipt
+  function printTestReceipt() {
+    // Create a sample transaction for testing
+    const testTransaction = {
+      id: `test-${Date.now()}`,
+      date: new Date().toISOString(),
+      timestamp: Date.now(),
+      total: 123.45,
+      paymentMethod: 'CASH' as const,
+      status: 'completed' as const,
+      items: [
+        {
+          id: 'test-item-1',
+          transactionId: `test-${Date.now()}`,
+          productId: 'test-product-1',
+          name: "BOY'S POLO SHIRT",
+          price: 23.00,
+          quantity: 2,
+          sku: 'BPS30'
+        },
+        {
+          id: 'test-item-2',
+          transactionId: `test-${Date.now()}`,
+          productId: 'test-product-2',
+          name: "BOY'S SHORT PANT",
+          price: 10.00,
+          quantity: 1,
+          sku: 'BTS140'
+        }
+      ]
+    };
+    
+    // Dispatch an event to trigger the print function in the parent component
+    dispatch('printTest', { transaction: testTransaction });
   }
 </script>
 
@@ -106,7 +147,7 @@
         </div>
       </div>
       
-      <div class="form-control">
+      <div class="form-control mb-4">
         <label class="label cursor-pointer justify-start gap-4">
           <input 
             type="checkbox" 
@@ -119,8 +160,21 @@
         </label>
       </div>
       
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-4">
+          <input 
+            type="checkbox" 
+            id="use-server-printing"
+            class="toggle toggle-primary" 
+            checked={settings.useServerPrinting}
+            onchange={() => settings.useServerPrinting = !settings.useServerPrinting}
+          />
+          <span class="label-text"><label for="use-server-printing">Use server-side printing (if disabled, will use browser printing)</label></span>
+        </label>
+      </div>
+      
       <div class="mt-4 pt-4 border-t border-base-200">
-        <button class="btn btn-sm btn-outline">
+        <button class="btn btn-sm btn-outline" onclick={printTestReceipt}>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>

@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { fade, fly } from 'svelte/transition';
+  import { goto } from '$app/navigation';
+  import { getStockWebSocket } from '$lib/services/websocket';
+  import type { Product, CartItem, Transaction, PaymentMethod, PrinterSettings as PrinterSettingsType, PaymentResult } from '$lib/types/pos';
+  import AEDIcon from '$lib/components/icons/AEDIcon.svelte';
   import PaymentModal from '$lib/components/pos/PaymentModal.svelte';
   import PrinterSettings from '$lib/components/pos/PrinterSettings.svelte';
   import StockLedgerModal from '$lib/components/stock/StockLedgerModal.svelte';
   import Receipt from '$lib/components/pos/Receipt.svelte';
   import BarcodeScanner from '$lib/components/pos/BarcodeScanner.svelte';
-  import type { Product, CartItem, Transaction, PaymentMethod, PrinterSettings as PrinterSettingsType, PaymentResult } from '$lib/types/pos';
-  import { getStockWebSocket } from '$lib/services/websocket';
   
   // POS state
   let cart = $state<CartItem[]>([]);
@@ -15,38 +17,68 @@
   let isLoading = $state(true);
   let isLoadingProducts = $state(true);
   let searchQuery = $state('');
-  let total = $derived(calculateTotal(cart));
-  let activeCategory = $state<string | null>(null);
-  let categories = $state<string[]>([]);
-  let page = $state(1);
-  let totalPages = $state(1);
-  
-  // UI state
+  let error = $state<string | null>(null);
+  let lastTransaction = $state<Transaction | null>(null);
   let isPaymentModalOpen = $state(false);
   let isSettingsOpen = $state(false);
   let isStockLedgerOpen = $state(false);
-  let isBarcodeEnabled = $state(true);
-  let lastTransaction = $state<Transaction | null>(null);
-  let error = $state<string | null>(null);
   let selectedProduct = $state<Product | null>(null);
+  let isBarcodeEnabled = $state(true);
+  let activeCategory = $state<string | null>(null);
+  let categories = $state<string[]>([]);
+  let currentPage = $state(1); // Renamed from 'page' to avoid conflict with imported 'page'
+  let totalPages = $state(1);
   
   // Printer settings
   let printerSettings = $state<PrinterSettingsType>({
     enabled: true,
     printerName: '',
-    autoPrint: true
+    autoPrint: true,
+    useServerPrinting: false
   });
   
   // Business info for receipts
   const businessInfo = {
-    name: 'SNS Store',
-    address: 'Dubai, United Arab Emirates',
-    phone: '+971 4 123 4567',
-    email: 'info@snsstore.ae'
+    name: 'Smart & Style UAQ Branch',
+    address: 'Mall Of - Green Belt - Umm Al Quwain',
+    phone: '050 973 9042',
+    email: ''
   };
+  
+  // Derived values
+  let total = $derived(calculateTotal(cart));
+  let filteredProducts = $derived(filterProducts(products, searchQuery, activeCategory));
+  
+  // Filter products based on search query and category
+  function filterProducts(products: Product[], query: string, category: string | null): Product[] {
+    return products.filter(product => {
+      // Filter by category if one is selected
+      const matchesCategory = category === null || product.category === category;
+      if (!matchesCategory) {
+        return false;
+      }
+      
+      // Filter by search query if one is provided
+      if (query) {
+        const searchLower = query.toLowerCase();
+        return (
+          product.name.toLowerCase().includes(searchLower) ||
+          product.sku?.toLowerCase().includes(searchLower) ||
+          product.barcode?.toLowerCase().includes(searchLower) ||
+          product.category.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  }
+  
+  // WebSocket connection for real-time stock updates
   
   // WebSocket connection for real-time stock updates
   let stockWebSocket: any = null;
+  
+  // WebSocket connection for real-time stock updates
   
   onMount(async () => {
     await loadProducts();
@@ -62,23 +94,60 @@
           
           // Update product stock levels if they're in our current products list
           if (data && data.items && Array.isArray(data.items)) {
+            let updatedProducts = false;
+            
             data.items.forEach((item: any) => {
               const index = products.findIndex(p => p.sku === item.sku || p.id === item.id);
               if (index !== -1) {
                 // Update the product stock level
-                products[index].inStock = item.quantity || item.inStock || 0;
+                const newStockLevel = item.quantity || item.inStock || 0;
+                const oldStockLevel = products[index].inStock;
                 
-                // Also update any matching items in the cart
-                cart = cart.map(cartItem => {
-                  if (cartItem.productId === products[index].id || cartItem.sku === item.sku) {
-                    return { ...cartItem, currentStock: products[index].inStock };
+                // Only update if the stock level has changed
+                if (newStockLevel !== oldStockLevel) {
+                  products[index].inStock = newStockLevel;
+                  updatedProducts = true;
+                  
+                  // Show notification for low stock items
+                  if (newStockLevel <= 5 && newStockLevel > 0) {
+                    error = `Low stock alert: ${products[index].name} has only ${newStockLevel} units left`;
+                    setTimeout(() => { if (error && error.includes('Low stock alert')) error = null; }, 5000);
+                  } else if (newStockLevel === 0) {
+                    error = `Out of stock alert: ${products[index].name} is now out of stock`;
+                    setTimeout(() => { if (error && error.includes('Out of stock alert')) error = null; }, 5000);
                   }
-                  return cartItem;
-                });
+                  
+                  // Also update any matching items in the cart
+                  cart = cart.map(cartItem => {
+                    if (cartItem.productId === products[index].id || cartItem.sku === item.sku) {
+                      return { ...cartItem, currentStock: newStockLevel };
+                    }
+                    return cartItem;
+                  });
+                  
+                  // Check if any cart items now exceed available stock
+                  cart.forEach(cartItem => {
+                    if ((cartItem.productId === products[index].id || cartItem.sku === item.sku) && 
+                        cartItem.quantity > newStockLevel) {
+                      error = `Warning: ${products[index].name} quantity in cart (${cartItem.quantity}) exceeds available stock (${newStockLevel})`;
+                      setTimeout(() => { if (error && error.includes('Warning:')) error = null; }, 7000);
+                    }
+                  });
+                }
               }
             });
+            
+            // If products were updated, refresh the filtered products
+            if (updatedProducts) {
+              // This will trigger a reactive update of filteredProducts
+              products = [...products];
+            }
           }
         });
+        
+        // Send initial sync request to get latest stock levels
+        stockWebSocket.emit('sync_request', { type: 'stock_levels' });
+        
       } catch (error) {
         console.error('Failed to initialize WebSocket connection:', error);
       }
@@ -95,12 +164,37 @@
   // Load products from API
   async function loadProducts(pageNum = 1, search = '') {
     isLoadingProducts = true;
+    error = null; // Clear any previous errors
+    
     try {
       // Use the stock inventory API to get real inventory items
-      const response = await fetch(`/api/stock/entries?page=${pageNum}&limit=20&search=${encodeURIComponent(search)}`);
-      if (!response.ok) throw new Error('Failed to fetch products');
+      const response = await fetch(`/api/stock/entries?page=${pageNum}&limit=20&search=${encodeURIComponent(search)}`, {
+        // Add cache control headers to prevent caching
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error (${response.status}):`, errorText);
+        throw new Error(`Failed to fetch products: ${response.status} ${response.statusText}`);
+      }
       
       const data = await response.json();
+      
+      // Log the received data structure to help diagnose issues
+      console.log('API Response structure:', Object.keys(data));
+      
+      if (!data.entries || !Array.isArray(data.entries)) {
+        console.error('Invalid data format:', data);
+        throw new Error('Invalid data format received from API');
+      }
+      
+      // Log the number of entries received
+      console.log(`Received ${data.entries.length} entries from API`);
       
       // Map stock entries to POS products format with real data
       products = data.entries.map((entry: any) => {
@@ -111,27 +205,31 @@
         
         return {
           id: entry.id || `product-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          name: entry.itemName || 'Unnamed Product',
-          price: typeof entry.rate === 'number' ? entry.rate : 23.00,  // Use actual rate from entries
+          name: entry.itemName || entry.item_name || entry.name || entry.description || sku || 'Product',
+          price: typeof entry.rate === 'number' ? entry.rate : (typeof entry.price === 'number' ? entry.price : 23.00),
           category: category,
           barcode: sku,
           sku: sku,
-          image: undefined,  // We'll use placeholder images
-          inStock: typeof entry.quantity === 'number' ? entry.quantity : 0
+          image: entry.image || undefined,
+          inStock: typeof entry.quantity === 'number' ? entry.quantity : (typeof entry.stock === 'number' ? entry.stock : 0)
         };
       });
       
-      page = data.pagination?.page || 1;
+      currentPage = data.pagination?.page || 1;
       totalPages = data.pagination?.totalPages || 1;
       
       // Extract unique categories
       const categorySet = new Set(products.map(p => p.category));
       categories = Array.from(categorySet);
-    } catch (err) {
-      console.error('Error loading products:', err);
-      error = 'Using mock inventory data due to API error.';
       
-      // Fallback to mock data based on real stock entries
+      console.log(`Successfully loaded ${products.length} products from inventory API`);
+    } catch (err: any) {
+      console.error('Error loading products:', err);
+      const errorMessage = err?.message || 'Unknown error';
+      error = `Unable to connect to inventory system: ${errorMessage}. Using demo data.`;
+      setTimeout(() => { error = null; }, 5000);
+      
+      // Fallback to demo data based on real stock entries
       products = [
         {
           id: 'bps30-1',
@@ -186,24 +284,32 @@
     }
   }
   
-  // Filter products based on search and category
-  const filteredProducts = $derived(
-    products.filter(product => {
-      const matchesCategory = activeCategory === null || 
-        product.category === activeCategory;
-      return matchesCategory;
-    })
-  );
+  // This filtering logic is now handled by the filterProducts function above
+  // and the derived filteredProducts variable
   
   // Add item to cart
   function addToCart(product: Product) {
+    // Check if product is in stock
+    if (product.inStock <= 0) {
+      error = `${product.name} is out of stock`;
+      setTimeout(() => { error = null; }, 3000);
+      return;
+    }
+    
     const existingItem = cart.find(item => item.productId === product.id);
     
     if (existingItem) {
+      // Check if requested quantity exceeds available stock
+      if (existingItem.quantity + 1 > product.inStock) {
+        error = `Cannot add more ${product.name}. Only ${product.inStock} available in stock.`;
+        setTimeout(() => { error = null; }, 3000);
+        return;
+      }
+      
       // Update quantity if item already in cart
       cart = cart.map(item => 
         item.productId === product.id 
-          ? { ...item, quantity: item.quantity + 1 } 
+          ? { ...item, quantity: item.quantity + 1, currentStock: product.inStock } 
           : item
       );
     } else {
@@ -212,7 +318,9 @@
         productId: product.id,
         name: product.name,
         price: product.price,
-        quantity: 1
+        sku: product.sku,
+        quantity: 1,
+        currentStock: product.inStock
       }];
     }
   }
@@ -235,18 +343,28 @@
     
     // If not found locally, try to fetch from API
     try {
-      const response = await fetch(`/api/pos/lookup/barcode/${encodeURIComponent(barcode)}`);
-      // Using the new non-conflicting route path
+      console.log(`Looking up barcode: ${barcode}`);
+      const response = await fetch(`/api/pos/lookup/barcode/${encodeURIComponent(barcode)}`, {
+        // Add cache control headers to prevent caching
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       
       if (!response.ok) {
         if (response.status === 404) {
           error = `Product with barcode ${barcode} not found`;
           throw new Error(`Product with barcode ${barcode} not found`);
         }
-        throw new Error('Failed to fetch product');
+        const errorText = await response.text();
+        console.error(`API Error (${response.status}):`, errorText);
+        throw new Error(`Failed to fetch product: ${response.status} ${response.statusText}`);
       }
       
       const product = await response.json();
+      console.log('Found product:', product);
       addToCart(product);
       searchQuery = '';
     } catch (err) {
@@ -266,14 +384,30 @@
     if (newQuantity <= 0) {
       // Remove item if quantity is 0 or less
       cart = cart.filter(item => item.productId !== productId);
-    } else {
-      // Update quantity
-      cart = cart.map(item => 
-        item.productId === productId 
-          ? { ...item, quantity: newQuantity } 
-          : item
-      );
+      return;
     }
+    
+    // Find the item in the cart
+    const cartItem = cart.find(item => item.productId === productId);
+    if (!cartItem) return;
+    
+    // Find the corresponding product to check current stock
+    const product = products.find(p => p.id === productId);
+    
+    // If we can't find the product or if requested quantity exceeds available stock
+    if (!product || newQuantity > product.inStock) {
+      const maxAvailable = product?.inStock || cartItem.currentStock || 0;
+      error = `Cannot update quantity. Only ${maxAvailable} units available in stock.`;
+      setTimeout(() => { error = null; }, 3000);
+      return;
+    }
+    
+    // Update quantity
+    cart = cart.map(item => 
+      item.productId === productId 
+        ? { ...item, quantity: newQuantity, currentStock: product.inStock } 
+        : item
+    );
   }
   
   // Remove item from cart
@@ -302,6 +436,12 @@
     }
   }
   
+  // Format price with AED currency symbol - this function is used in the template
+  // to display prices with the AED currency symbol
+  function formatPriceWithCurrency(price: number | undefined | null): string {
+    return formatPrice(price);
+  }
+  
   // Open payment modal
   function openPaymentModal() {
     if (cart.length === 0) return;
@@ -312,29 +452,64 @@
   const dispatch = createEventDispatcher();
   
   // Handle payment completion
-  function handlePaymentComplete(event: CustomEvent<PaymentResult>) {
+  async function handlePaymentComplete(event: CustomEvent<PaymentResult>) {
     const result = event.detail;
     
     if (result.success && result.transactionId) {
       try {
-        // Create a transaction object locally instead of making an API call
-        // This avoids the fetch error when the API endpoint might not be fully implemented
+        // Create transaction items with all necessary details for inventory updates
+        const transactionItems = cart.map(item => ({
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          transactionId: result.transactionId!,
+          productId: item.productId,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          sku: item.sku || ''
+        }));
+        
+        // Create a transaction object
         const transaction: Transaction = {
           id: result.transactionId,
           date: new Date().toISOString(),
+          timestamp: Date.now(),
           total: total,
           paymentMethod: result.paymentMethod || 'CASH',
           status: 'completed',
-          items: cart.map(item => ({
-            id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            transactionId: result.transactionId!,
-            productId: item.productId,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            sku: item.sku
-          }))
+          items: transactionItems
         };
+        
+        // Send the transaction to the server to update inventory
+        try {
+          const response = await fetch('/api/pos/transactions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              total: transaction.total,
+              paymentMethod: transaction.paymentMethod,
+              items: transaction.items
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to create transaction');
+          }
+          
+          // Update local product stock levels to reflect the changes
+          cart.forEach(item => {
+            const productIndex = products.findIndex(p => p.id === item.productId);
+            if (productIndex !== -1) {
+              products[productIndex].inStock -= item.quantity;
+            }
+          });
+          
+          console.log('Transaction created successfully:', transaction.id);
+        } catch (apiError) {
+          console.error('API error, falling back to local transaction:', apiError);
+          // Even if the API fails, we'll still create a local transaction for receipt purposes
+        }
         
         // Store last transaction for receipt
         lastTransaction = transaction;
@@ -365,40 +540,160 @@
     isPaymentModalOpen = false;
   }
   
-  // Handle stock ledger modal close
+  // Close stock ledger modal
   function closeStockLedgerModal() {
     isStockLedgerOpen = false;
     selectedProduct = null;
   }
   
-  // Print receipt
+  // Print receipt using browser-native printing or server-side printing
   async function printReceipt(transaction: Transaction) {
-    if (!printerSettings.enabled || !transaction) return;
+    if (!transaction) return;
     
-    try {
-      const response = await fetch('/api/pos/printers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transactionId: transaction.id,
-          printerName: printerSettings.printerName,
-          businessName: businessInfo.name,
-          businessAddress: businessInfo.address,
-          businessPhone: businessInfo.phone,
-          businessEmail: businessInfo.email
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to print receipt');
+    // First try the server-side printing if enabled and configured
+    if (printerSettings.enabled && printerSettings.printerName && printerSettings.useServerPrinting) {
+      try {
+        const response = await fetch('/api/pos/printers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transactionId: transaction.id,
+            printerName: printerSettings.printerName,
+            businessName: businessInfo.name,
+            businessAddress: businessInfo.address,
+            businessPhone: businessInfo.phone,
+            businessEmail: businessInfo.email
+          })
+        });
+        
+        if (response.ok) {
+          console.log('Server-side printing successful');
+          return; // Exit if server printing was successful
+        } else {
+          console.warn('Server-side printing failed, falling back to browser printing');
+        }
+      } catch (err) {
+        console.error('Server-side printing error:', err);
       }
+    }
+    
+    // Browser-native printing as fallback or primary method
+    try {
+      // Create a hidden iframe for printing
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
       
-      // Show success message or notification
+      // Create receipt content optimized for 58mm thermal printer (32-35 chars per line)
+      const receiptContent = `
+        <html>
+        <head>
+          <title>Receipt ${transaction.id}</title>
+          <style>
+            @page {
+              size: 58mm auto; /* Width of thermal paper roll */
+              margin: 0mm;
+            }
+            body {
+              font-family: monospace;
+              font-size: 9pt;
+              line-height: 1.1;
+              margin: 0;
+              padding: 1mm;
+              width: 56mm; /* 58mm - 2mm for padding */
+              box-sizing: border-box;
+            }
+            .center { text-align: center; }
+            .header { font-weight: bold; font-size: 10pt; }
+            .divider { border-top: 1px dashed #000; margin: 1mm 0; }
+            .item { display: flex; justify-content: space-between; }
+            .item-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .item-qty { width: 5mm; text-align: center; }
+            .item-price { width: 15mm; text-align: right; }
+            .total { font-weight: bold; margin-top: 1mm; }
+            .footer { margin-top: 2mm; font-size: 8pt; }
+            /* Hide print button when printing */
+            @media print {
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="center header">${businessInfo.name}</div>
+          <div class="center">${businessInfo.address}</div>
+          <div class="center">${businessInfo.phone}</div>
+          <div class="divider"></div>
+          <div>Receipt: ${transaction.id}</div>
+          <div>Date: ${new Date(transaction.date).toLocaleDateString()}</div>
+          <div>Time: ${new Date(transaction.date).toLocaleTimeString()}</div>
+          <div class="divider"></div>
+          
+          ${transaction.items.map(item => `
+            <div class="item">
+              <div class="item-name">${item.name}</div>
+              <div class="item-qty">${item.quantity}</div>
+              <div class="item-price">AED ${formatPrice(item.price * item.quantity)}</div>
+            </div>
+            <div class="item">
+              <div class="item-name"></div>
+              <div class="item-qty"></div>
+              <div class="item-price">@${formatPrice(item.price)}</div>
+            </div>
+          `).join('')}
+          
+          <div class="divider"></div>
+          <div class="item total">
+            <div>TOTAL</div>
+            <div>AED ${formatPrice(transaction.total)}</div>
+          </div>
+          <div class="item">
+            <div>PAYMENT</div>
+            <div>${transaction.paymentMethod}</div>
+          </div>
+          <div class="divider"></div>
+          <div class="center footer">Thank you for your purchase!</div>
+          <div class="center footer">Please come again</div>
+          
+          <button class="no-print" style="margin-top: 10mm; width: 100%; padding: 2mm;" onclick="window.print(); setTimeout(() => window.close(), 500);">Print Receipt</button>
+        </body>
+        </html>
+      `;
+      
+      // Set the content and print
+      const frameDoc = printFrame.contentWindow?.document;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(receiptContent);
+        frameDoc.close();
+        
+        // Wait for content to load before printing
+        printFrame.onload = () => {
+          try {
+            // Print the receipt
+            printFrame.contentWindow?.print();
+            
+            // Remove the iframe after printing (or after a timeout)
+            setTimeout(() => {
+              document.body.removeChild(printFrame);
+            }, 1000);
+          } catch (err) {
+            console.error('Printing failed:', err);
+            error = 'Failed to print receipt. Please try again.';
+            setTimeout(() => { error = null; }, 3000);
+          }
+        };
+      }
     } catch (err) {
-      console.error('Error printing receipt:', err);
-      // Show error toast or notification
+      console.error('Error setting up browser printing:', err);
+      error = 'Failed to prepare receipt for printing.';
+      setTimeout(() => { error = null; }, 3000);
     }
   }
   
@@ -431,18 +726,10 @@
           </button>
         </div>
         <div class="p-4">
-          <div class="form-control mb-4">
-            <label class="cursor-pointer label justify-start gap-4">
-              <input type="checkbox" class="toggle toggle-primary" bind:checked={printerSettings.enabled} />
-              <span class="label-text">Enable Receipt Printing</span>
-            </label>
-          </div>
-          <div class="form-control mb-4">
-            <label class="cursor-pointer label justify-start gap-4">
-              <input type="checkbox" class="toggle toggle-primary" bind:checked={printerSettings.autoPrint} />
-              <span class="label-text">Auto-print after transaction</span>
-            </label>
-          </div>
+          <PrinterSettings
+            bind:settings={printerSettings}
+            on:printTest={(e) => printReceipt(e.detail.transaction)}
+          />
         </div>
         <div class="p-4 border-t border-base-200 flex justify-end gap-2">
           <button class="btn btn-primary" onclick={() => isSettingsOpen = false}>Save</button>
@@ -451,6 +738,23 @@
     </div>
   </div>
 {/if}
+
+<!-- Error notification -->
+{#if error}
+  <div class="fixed top-4 right-4 z-50" transition:fly={{ y: -20, duration: 200 }}>
+    <div class="bg-error/10 border-l-4 border-error text-error px-4 py-3 rounded shadow-md flex items-start">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>{error}</span>
+    </div>
+  </div>
+{/if}
+
+<BarcodeScanner 
+  enabled={isBarcodeEnabled}
+  on:scan={handleBarcodeScan}
+/>
 
 {#if isPaymentModalOpen}
   <PaymentModal 
@@ -644,8 +948,12 @@
                     {/if}
                   </div>
                   <div class="text-right">
-                    <p class="font-semibold">AED {formatPrice(item.price * item.quantity)}</p>
-                    <p class="text-xs text-base-content/60">AED {formatPrice(item.price)} each</p>
+                    <p class="font-semibold flex items-center justify-end">
+                      <AEDIcon width={14} height={12} class="mr-1" /> {formatPrice(item.price * item.quantity)}
+                    </p>
+                    <p class="text-xs text-base-content/60 flex items-center justify-end">
+                      <AEDIcon width={10} height={8} class="mr-1" /> {formatPrice(item.price)} each
+                    </p>
                   </div>
                 </div>
                 <div class="flex justify-between items-center mt-2">
@@ -689,13 +997,15 @@
       <div class="space-y-3">
         <div class="flex justify-between">
           <span class="text-base-content/70">Subtotal ({cart.length} items)</span>
-          <span>AED {formatPrice(total)}</span>
+          <span class="flex items-center">
+            <AEDIcon width={14} height={12} class="mr-1" /> {formatPrice(total)}
+          </span>
         </div>
         
         <div class="flex justify-between items-center">
           <span class="text-base-content/70">Discount</span>
           <div class="flex items-center gap-2">
-            <span>-AED 0.00</span>
+            <span class="flex items-center">-<AEDIcon width={14} height={12} class="mx-1" /> 0.00</span>
             <button class="btn btn-xs btn-ghost" aria-label="Search">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -707,13 +1017,15 @@
         
         <div class="flex justify-between">
           <span class="text-base-content/70">Tax (5% VAT)</span>
-          <span>+AED {formatPrice(total * 0.05)}</span>
+          <span class="flex items-center">+<AEDIcon width={14} height={12} class="mx-1" /> {formatPrice(total * 0.05)}</span>
         </div>
         
         <div class="border-t border-base-300 pt-3 mt-2">
           <div class="flex justify-between font-bold text-lg">
             <span>Total</span>
-            <span class="text-primary">AED {formatPrice(total + (total * 0.05))}</span>
+            <span class="text-primary flex items-center">
+              <AEDIcon width={16} height={14} class="mr-1" color="currentColor" /> {formatPrice(total + (total * 0.05))}
+            </span>
           </div>
         </div>
       </div>
@@ -936,20 +1248,25 @@
                     </div>
                   {/if}
                   <h3 class="font-medium text-base-content truncate">{product.name}</h3>
-                  <p class="text-primary font-semibold mt-1">AED {formatPrice(product.price)}</p>
+                  <p class="text-primary font-semibold mt-1 flex items-center justify-center">
+                    <AEDIcon width={14} height={12} class="mr-1" /> {formatPrice(product.price)}
+                  </p>
                 </div>
                 <div class="mt-2 w-full">
-                  <div class="flex justify-between items-center text-xs text-base-content/60 mb-1">
-                    <span>{product.category}</span>
-                    <span class="badge badge-sm {product.inStock > 10 ? 'badge-success' : (product.inStock > 0 ? 'badge-warning' : 'badge-error')}">
-                      {product.inStock > 0 ? `${product.inStock} left` : 'Out of stock'}
-                    </span>
+                  <div class="flex justify-between items-center text-xs mb-1">
+                    <span class="text-base-content/60">{product.sku || product.category}</span>
+                    <div class="flex items-center">
+                      <div class="w-2 h-2 rounded-full mr-1 {product.inStock > 10 ? 'bg-success' : (product.inStock > 0 ? 'bg-warning' : 'bg-error')}"></div>
+                      <span class="{product.inStock > 10 ? 'text-success' : (product.inStock > 0 ? 'text-warning' : 'text-error')} font-medium">
+                        {product.inStock > 0 ? `${product.inStock} in stock` : 'Out of stock'}
+                      </span>
+                    </div>
                   </div>
-                  <div class="btn btn-sm {product.inStock > 0 ? 'btn-primary' : 'btn-disabled'} w-full flex items-center justify-center gap-1">
+                  <div class="btn btn-sm {product.inStock > 0 ? 'bg-error text-error-content hover:bg-error/90' : 'btn-disabled bg-base-200'} w-full flex items-center justify-center gap-1 border-none">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
-                    Add to Cart
+                    {product.inStock > 0 ? 'Add to Cart' : 'Out of Stock'}                    
                   </div>
                 </div>
               </button>
@@ -961,9 +1278,9 @@
             <div class="flex justify-center mt-6">
               <div class="join">
                 <button 
-                  class="join-item btn btn-sm {page === 1 ? 'btn-disabled' : 'btn-outline'}"
-                  onclick={() => loadProducts(page - 1, searchQuery)}
-                  disabled={page === 1}
+                  class="join-item btn btn-sm {currentPage === 1 ? 'btn-disabled' : 'btn-outline'}"
+                  onclick={() => loadProducts(currentPage - 1, searchQuery)}
+                  disabled={currentPage === 1}
                   aria-label="Previous page"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -971,12 +1288,12 @@
                   </svg>
                 </button>
                 <button class="join-item btn btn-sm btn-ghost pointer-events-none">
-                  Page {page} of {totalPages}
+                  Page {currentPage} of {totalPages}
                 </button>
                 <button 
-                  class="join-item btn btn-sm {page === totalPages ? 'btn-disabled' : 'btn-outline'}"
-                  onclick={() => loadProducts(page + 1, searchQuery)}
-                  disabled={page === totalPages}
+                  class="join-item btn btn-sm {currentPage === totalPages ? 'btn-disabled' : 'btn-outline'}"
+                  onclick={() => loadProducts(currentPage + 1, searchQuery)}
+                  disabled={currentPage === totalPages}
                   aria-label="Next page"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1030,7 +1347,17 @@
                   <div class="flex justify-between">
                     <div>
                       <h4 class="text-sm font-medium">{item.name}</h4>
-                      <p class="text-xs text-base-content/70">{item.sku || 'No SKU'}</p>
+                      <div class="flex items-center gap-1">
+                        <p class="text-xs text-base-content/70">{item.sku || 'No SKU'}</p>
+                        {#if item.currentStock !== undefined}
+                          <div class="flex items-center">
+                            <div class="w-1.5 h-1.5 rounded-full mr-0.5 {item.currentStock > 10 ? 'bg-success' : (item.currentStock > item.quantity ? 'bg-warning' : 'bg-error')}"></div>
+                            <span class="text-xs {item.currentStock > 10 ? 'text-success' : (item.currentStock > item.quantity ? 'text-warning' : 'text-error')}">
+                              {item.currentStock} left
+                            </span>
+                          </div>
+                        {/if}
+                      </div>
                     </div>
                     <div class="text-right">
                       <p class="text-sm font-medium">AED {formatPrice(item.price * item.quantity)}</p>
