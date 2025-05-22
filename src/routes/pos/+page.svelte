@@ -348,14 +348,33 @@
     if (!cartItem) return;
     
     // Find the corresponding product to check current stock
-    const product = products.find(p => p.id === productId);
+    // Try to find by ID first, then by SKU if ID doesn't match
+    let product = products.find(p => p.id === productId);
     
-    // If we can't find the product or if requested quantity exceeds available stock
-    if (!product || newQuantity > product.inStock) {
-      const maxAvailable = product?.inStock || cartItem.currentStock || 0;
-      error = `Cannot update quantity. Only ${maxAvailable} units available in stock.`;
-      setTimeout(() => { error = null; }, 3000);
+    // If product not found by ID, try to find by SKU/barcode
+    if (!product && cartItem.sku) {
+      product = products.find(p => p.sku === cartItem.sku || p.barcode === cartItem.sku);
+    }
+    
+    // If still not found, use the cart item's current stock information
+    if (!product) {
+      console.warn(`Product not found in products array. Using cart item data for ${productId}`);
+      
+      // Update the cart item without checking stock
+      cart = cart.map(item => 
+        item.productId === productId 
+          ? { ...item, quantity: newQuantity } 
+          : item
+      );
       return;
+    }
+    
+    // Optional warning for low stock but still allow the transaction
+    if (newQuantity > product.inStock) {
+      // Just show a warning but don't prevent the update
+      const warningMessage = `Warning: Requested quantity (${newQuantity}) exceeds available stock (${product.inStock}).`;
+      console.warn(warningMessage);
+      // We could display this as a warning toast instead of blocking the operation
     }
     
     // Update quantity
