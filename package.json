@@ -22,6 +22,7 @@
 		"db:inspect": "npx wrangler d1 execute sns-app-dev --local --file=./drizzle/inspect.sql",
 		"db:inspect-detailed": "npx wrangler d1 execute sns-app-dev --local --file=./drizzle/detailed-inspect.sql",
 		"db:test-item": "npx wrangler d1 execute sns-app-dev --local --file=./drizzle/test-item.sql",
+		"db:deploy": "npx wrangler d1 execute sns-app --file=./drizzle/deploy.sql",
 		"test:e2e": "playwright test",
 		"test": "npm run test:e2e"
 	},
